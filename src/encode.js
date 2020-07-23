@@ -242,38 +242,40 @@ function encodeCanonicalBinaryRationalToken (mant, exp2) {
 }
 
 
-function DborEncoder () {
-  this.bytes = []
+class DborEncoder {
+  constructor() {
+    this.bytes = [];
+  }
 
   // Append a NoneValue.
-  this.appendNone = function () {
+  appendNone() {
     this.bytes.push(0xFF);
     return this;
   }
 
   // Append a MinusZeroValue.
-  this.appendMinusZero = function () {
+  appendMinusZero () {
     this.bytes.push(0xFC);
     return this;
   }
 
   // Append a MinusInfinityValue.
-  this.appendMinusInfinity = function () {
+  appendMinusInfinity () {
     this.bytes.push(0xFD);
     return this;
   }
 
   // Append a InfinityValue.
-  this.appendInfinity = function () {
+  appendInfinity () {
     this.bytes.push(0xFE);
     return this;
   }
 
   // Append an IntegerValue representing *value*, which can by an integer Number or a BigInt.
   // Throws RangeError if *value* not in the range -18'519'084'246'547'628'312 .. 18'519'084'246'547'628'311.
-  this.appendInteger = function (value) {
+  appendInteger (value) {
     value = BigInt(value);
-    const bytes = (value >= 0n) ?  encodeIntegerToken(0, value) : encodeIntegerToken(1, -(value + 1n));
+    const bytes = (value >= 0n) ? encodeIntegerToken(0, value) : encodeIntegerToken(1, -(value + 1n));
     this.bytes = this.bytes.concat(bytes);
     return this;
   }
@@ -281,7 +283,7 @@ function DborEncoder () {
   // Append an IntegerValue or BinaryRationalValue representing *mant * 2^exp2*.
   // *mant* can be a Number or BigInt, *exp2* a BigInt.
   // Throws RangeError if *mant * 2^exp2* not representable.
-  this.appendBinaryRational = function (mant, exp2) {
+  appendBinaryRational (mant, exp2) {
     if (Number.isNaN(mant))
       return this.appendNone();
     if (mant === Number.NEGATIVE_INFINITY)
@@ -292,7 +294,7 @@ function DborEncoder () {
       return this.appendMinusZero();
 
     exp2 = BigInt(exp2);
-    if (Number.isFinite(mant)) {  // false for BigInt
+    if (Number.isFinite(mant)) { // false for BigInt
       let [mantm, exp2m] = splitFiniteNumberIntoBinaryRationalComponents(mant);
       mant = mantm;
       exp2 += BigInt(exp2m);
@@ -300,9 +302,9 @@ function DborEncoder () {
 
     mant = BigInt(mant);
     if (mant == 0n)
-      return this.appendInteger(0)
+      return this.appendInteger(0);
 
-    const bytes = encodeCanonicalBinaryRationalToken(mant, exp2)
+    const bytes = encodeCanonicalBinaryRationalToken(mant, exp2);
     this.bytes = this.bytes.concat(bytes);
     return this;
   }
@@ -311,7 +313,7 @@ function DborEncoder () {
   // *mant* and *exp10* can be integer Number or a BigInt.
   // Throws RangeError if *mant* not in the range -18'519'084'246'547'628'312 .. 18'519'084'246'547'628'311 or
   // *exp10* not in the range -18'519'084'246'547'628'296 .. 18'519'084'246'547'628'296.
-  this.appendDecimalRational = function (mant, exp10) {
+  appendDecimalRational (mant, exp10) {
     mant = BigInt(mant);
     exp10 = BigInt(exp10);
     if (mant == 0n || exp10 == 0n)
@@ -324,7 +326,7 @@ function DborEncoder () {
 
   // Append a ByteStringValue representing *value* (an array of numbers).
   // Throws RangeError if *value* is not an iterable of object o such that Number(o) is an integer in the range 0x00 .. 0xFF.
-  this.appendByteString = function (value) {
+  appendByteString (value) {
     let bytes = [];
     value.forEach(b => {
       const n = Number(b);
@@ -339,7 +341,7 @@ function DborEncoder () {
 
   // Append a Utf8StringValue representing String(value) in Normalization Form C.
   // Throws RangeError if String(value) contains an invalid code point.
-  this.appendUtf8String = function (value) {
+  appendUtf8String (value) {
     value = String(value);
 
     let codepoints = [];
