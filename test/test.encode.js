@@ -177,6 +177,149 @@ describe('encoding helpers', function () {
     });
   });
 
+  describe('normalizeBinaryRationalComponents()', function () {
+    it('power of 2', function () {
+      let [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(-1n, 0);
+      assert.isTrue(mantNorm == 1n << 52n);
+      assert.deepEqual([isNeg, exp2Norm], [true, -52]);
+
+      [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(1n, 100);
+      assert.isTrue(mantNorm == 1n << 52n);
+      assert.deepEqual([isNeg, exp2Norm], [false, 100 - 52]);
+
+      [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(-1n, -100);
+      assert.isTrue(mantNorm == 1n << 52n);
+      assert.deepEqual([isNeg, exp2Norm], [true, -100 - 52]);
+    });
+
+    it('zero', function () {
+      let [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(0, 1234);
+      assert.isTrue(mantNorm == 0n);
+      assert.deepEqual([isNeg, exp2Norm], [false, -1022 - 52]);
+    });
+
+    it('maximum mantissa width for normalized', function () {
+      let [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents((1n << 53n) - 1n, 0);
+      assert.isTrue(mantNorm == (1n << 53n) - 1n);
+      assert.deepEqual([isNeg, exp2Norm], [false, 0]);
+
+      assert.throws(function () { normalizeBinaryRationalComponents((1n << 54n) - 1n, 0n); }, RangeError);
+    });
+
+    it('maximum exponent', function () {
+      let [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(1n, 1024);
+      assert.isTrue(mantNorm == 1n << 52n);
+      assert.deepEqual([isNeg, exp2Norm], [false, 1024 - 52]);
+
+      assert.throws(function () { normalizeBinaryRationalComponents(1n, 1025); }, RangeError);
+    });
+
+    it('minimum exponent', function () {
+      let [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(1n, -1022 - 52);
+      assert.isTrue(mantNorm == 1n);
+      assert.deepEqual([isNeg, exp2Norm], [false, -1022 - 52]);
+
+      assert.throws(function () { normalizeBinaryRationalComponents(1n, -1022 - 53); }, RangeError);
+
+      [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(-((1n << 52n) - 1n), -1022 - 52);
+      assert.isTrue(mantNorm == (1n << 52n) - 1n);
+      assert.deepEqual([isNeg, exp2Norm], [true, -1022 - 52]);
+
+      assert.throws(function () { normalizeBinaryRationalComponents(-((1n << 53n) - 1n), -1022 - 52); }, RangeError);
+    });
+  });
+
+  describe('encodeCanonicalBinaryRationalToken()', function () {
+    it('zero', function () {
+      assert.throws(function () { encodeCanonicalBinaryRationalToken(0n, 1n); }, RangeError);
+    });
+
+    it('p = 4', function () {
+      assert.deepEqual(encodeCanonicalBinaryRationalToken(1n, -3n), [0xC8, 0x00]);
+      assert.deepEqual(encodeCanonicalBinaryRationalToken(-1n, -3n), [0xC8, 0x80]);
+      assert.deepEqual(encodeCanonicalBinaryRationalToken(27n, 0n), [0xC8, 0x7B]);
+    });
+
+    it('p = 10', function () {
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken(-(1n << 17n) + (1n << 6n), 0),
+        [0xC9, 0xFF, 0xFF]);
+    });
+
+    it('p = 44', function () {
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken(1n, -1023),
+        [0xCE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken((1n << 45n) - 1n, -1023 - 44),
+        [0xCE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x00]);
+
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken(-1n, 1024),
+        [0xCE, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0xFF]);
+
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken((1n << 45n) - 1n, 1024 - 44),
+        [0xCE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F]);
+    });
+
+    it('p = 52', function () {
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken((1n << 46n) - 1n, 1024 - 45),
+        [0xCF, 0x80, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F]);
+
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken(1n, -1074),
+        [0xCF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken((1n << 46n) - 1n, -1023 - 45),
+        [0xCF, 0xC0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x00]);
+
+      assert.throws(function () { encodeCanonicalBinaryRationalToken(1n, -1075); }, RangeError);
+
+      assert.deepEqual(
+        encodeCanonicalBinaryRationalToken((1n << 52n) - 1n, -1074),
+        [0xCF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x0F, 0x00]);
+      assert.throws(function () { encodeCanonicalBinaryRationalToken((1n << 53n) - 1n, -1075); }, RangeError);
+    });
+
+  });
+
+  describe('splitFiniteNumberIntoBinaryRationalComponents()', function () {
+    it('typical', function () {
+      let [mant, exp2] = splitFiniteNumberIntoBinaryRationalComponents(0.125);  // 2^-3
+      assert.isTrue(mant == 1n << 52n);
+      assert.equal(exp2, -3 - 52);
+
+      [mant, exp2] = splitFiniteNumberIntoBinaryRationalComponents(-0.125);  // 2^-3
+      assert.isTrue(mant == -(1n << 52n));
+      assert.equal(exp2, -3 - 52);
+    });
+
+    it('zero', function () {
+      let [mant, exp2] = splitFiniteNumberIntoBinaryRationalComponents(0);
+      assert.isTrue(mant == 0n);
+      assert.equal(exp2, 0);
+
+      [mant, exp2] = splitFiniteNumberIntoBinaryRationalComponents(-0);
+      assert.isTrue(mant == 0n);
+      assert.equal(exp2, 0);
+    });
+
+    it('boundaries', function () {
+      let [mant, exp2] = splitFiniteNumberIntoBinaryRationalComponents(Number.MIN_VALUE);
+      assert.isTrue(mant == (1n << 52n));
+      assert.equal(exp2, -1022 - 52 - 52);
+
+      [mant, exp2] = splitFiniteNumberIntoBinaryRationalComponents(Number.MAX_VALUE);
+      assert.isTrue(mant == (1n << 53n) - 1n);
+      assert.equal(exp2, 1023 - 52);
+    });
+
+  });
+
 });
 
 describe('DborEncoder', function () {
@@ -246,6 +389,51 @@ describe('DborEncoder', function () {
 
       assert.throws(function () { e.appendInteger(nmax + 1n); }, RangeError);
       assert.deepEqual(e.bytes, [0x1F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+    });
+
+  });
+
+  describe('BinaryRational', function () {
+    it('typical', function () {
+      let e = new DborEncoder();
+      e.appendBinaryRational(2, -4).appendBinaryRational(-27n, 0n).appendBinaryRational(-0.125, 0).appendBinaryRational(0.5, -2);
+      assert.deepEqual(e.bytes, [
+        0xC8, 0x00,
+        0xC8, 0xFB,
+        0xC8, 0x80,
+        0xC8, 0x00
+      ]);
+    });
+
+    it('zero', function () {
+      let e = new DborEncoder();
+      e.appendBinaryRational(0, 123);
+      assert.deepEqual(e.bytes, [0x00]);
+    });
+
+    it('non-finite numbers', function () {
+      let e = new DborEncoder();
+      e.appendBinaryRational(Number.NaN, 0).appendBinaryRational(-0, 0)
+      .appendBinaryRational(Number.NEGATIVE_INFINITY, 0).appendBinaryRational(Number.POSITIVE_INFINITY, 0);
+      assert.deepEqual(e.bytes, [
+        0xFF,
+        0xFC, 0xFD, 0xFE
+      ]);
+    });
+
+    it('boundaries', function () {
+      let e = new DborEncoder();
+      e.appendBinaryRational(1n, -1074);
+      assert.deepEqual(e.bytes, [0xCF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+      assert.throws(function () { e.appendBinaryRational(1n, -1075); }, RangeError);
+      assert.deepEqual(e.bytes, [0xCF, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]);
+
+      e = new DborEncoder();
+      e.appendBinaryRational(-((1n << 53n) - 1n), 1024 - 52);
+      assert.deepEqual(e.bytes, [0xCF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+      assert.throws(function () { e.appendBinaryRational(-((1n << 53n) - 1n), 1024 - 51); }, RangeError);
+      assert.throws(function () { e.appendBinaryRational(-((1n << 54n) - 1n), 1024 - 52); }, RangeError);
+      assert.deepEqual(e.bytes, [0xCF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
     });
 
   });

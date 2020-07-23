@@ -118,11 +118,39 @@ function encodePowerOfTenToken (value) {
 }
 
 
-// Return (isNeg, mantNorm, exp2Norm) where
-// 0 <= mantNorm < 2^53, -1023 - 52 <= exp2Norm <= 1024 - 52, such that
-// |mantNorm| * 2^exp2Norm = |mant| * 2^exp2 and mant >= 2^52 for exp2 != -1022 - 52.
-// ???
-function normalizedBinaryRationalComponents (mant, exp2) {
+// Return [mant, exp2] such that mant * 2^exp2 = value and 2^52 <= |mant| < 2^53.
+function splitFiniteNumberIntoBinaryRationalComponents (value) {
+  if (!Number.isFinite(value))
+    throw new RangeError("'value' must be finite number");  // also if not a Number
+
+  let exp2 = 0;
+  let mantAbs = Math.abs(value);
+  if (Number.isSafeInteger(value))  // -0 is an integer
+    return [BigInt(value), 0];
+
+  while (mantAbs < 0) {
+    mantAbs *= 4503599627370496;
+    exp2 -= 52;
+  }
+  while (mantAbs > 4503599627370496) {  // 2^52
+    mantAbs /= 4503599627370496;
+    exp2 += 52;
+  }
+  while (mantAbs < 4503599627370496) {
+    mantAbs *= 2;
+    exp2 -= 1;
+  }
+  // 2^52 <= mantAbs < 2^53
+
+  return [BigInt(value < 0 ? -mantAbs : mantAbs), exp2];
+}
+
+
+// Return [isNeg, mantNorm, exp2Norm] where
+// 0 <= mantNorm < 2^53, -1022 - 52 <= exp2Norm <= 1024 - 52, such that
+// |mantNorm| * 2^exp2Norm = |mant| * 2^exp2 and mant >= 2^52 for exp2 > -1022 - 52
+// and mant < 2^52 for exp2 = -1022 - 52.
+function normalizeBinaryRationalComponents (mant, exp2) {
   mant = BigInt(mant);
   exp2 = BigInt(exp2);
 
@@ -149,13 +177,13 @@ function normalizedBinaryRationalComponents (mant, exp2) {
   if (exp2Norm > 1024n - 52n)
     throw new RangeError('magnitude too large');
 
-  if (exp2Norm < -1023n - 52n) {
+  if (exp2Norm <= -1022n - 52n) {
     // denormalized
     while (exp2Norm < -1022n - 52n && !(mantNormAbs & 1n)) {
       mantNormAbs /= 2n;
       exp2Norm += 1n;
     }
-    if (exp2Norm < -1022n - 52n)
+    if (exp2Norm < -1022n - 52n || mantNormAbs >= 1n << 52n)
       throw new RangeError('magnitude too small');
     return [isNeg, mantNormAbs, -1022 - 52];
   }
@@ -164,16 +192,15 @@ function normalizedBinaryRationalComponents (mant, exp2) {
 }
 
 
-// ???
-function encodeBinaryRationalToken (mant, exp2) {
-  let [isNeg, mantNorm, exp2Norm] = normalizedBinaryRationalComponents(mant, exp2)
+function encodeCanonicalBinaryRationalToken (mant, exp2) {
+  let [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(mant, exp2)
   if (mantNorm == 0n)
     throw new RangeError('must not be 0');
 
-  if (exp2Norm == -1023 - 52 && mantNorm & ((1n << (52n - 44n)) - 1n)) {
-    // p > 44 -> denormalized
-    mantNorm /= 2n;
-    exp2Norm += 1;
+  if (exp2Norm <= -1022 - 52 && mantNorm >= (1n << 51n) && !(mantNorm & 0x7Fn)) {
+    // p <= 44 -> normalized with exp2 = -1023 - 52
+    mantNorm *= 2n;
+    exp2Norm -= 1;
   }
 
   // mantNormMsb is 0 or 2^52
@@ -205,7 +232,7 @@ function encodeBinaryRationalToken (mant, exp2) {
   if (isNeg)
     binary += 1n << (8n * BigInt(k) + 7n);
 
-  bytes = [0xC8 | k];
+  let bytes = [0xC8 | k];
   for (let i = k + 1; i > 0; i -= 1) {
     bytes.push(Number(binary % 256n));
     binary /= 256n;
@@ -252,16 +279,30 @@ function DborEncoder () {
   }
 
   // Append an IntegerValue or BinaryRationalValue representing *mant * 2^exp2*.
-  // *mant* and *exp2* can be integer Number or a BigInt.
+  // *mant* can be a Number or BigInt, *exp2* a BigInt.
   // Throws RangeError if *mant * 2^exp2* not representable.
-  // ???
   this.appendBinaryRational = function (mant, exp2) {
-    mant = BigInt(mant);
+    if (Number.isNaN(mant))
+      return this.appendNone();
+    if (mant === Number.NEGATIVE_INFINITY)
+      return this.appendMinusInfinity();
+    if (mant === Number.POSITIVE_INFINITY)
+      return this.appendInfinity();
+    if (mant === 0 && 1 / mant < 0)
+      return this.appendMinusZero();
+
     exp2 = BigInt(exp2);
+    if (Number.isFinite(mant)) {  // false for BigInt
+      let [mantm, exp2m] = splitFiniteNumberIntoBinaryRationalComponents(mant);
+      mant = mantm;
+      exp2 += BigInt(exp2m);
+    }
+
+    mant = BigInt(mant);
     if (mant == 0n)
       return this.appendInteger(0)
 
-    const bytes = encodeBinaryRationalToken(mant, exp2)
+    const bytes = encodeCanonicalBinaryRationalToken(mant, exp2)
     this.bytes = this.bytes.concat(bytes);
     return this;
   }
