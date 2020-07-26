@@ -9,7 +9,13 @@
 </head>
 
 <body>
-  <div id="mocha"></div>
+  <div id="mocha">
+    <div id="unittest-result">
+      Unit tests not executed.
+      Make sure execution of ECMAScript is allowed from the necessary sources
+      and check the console for reported errors.
+    </div>
+  </div>
 
   <script src="https://unpkg.com/mocha/mocha.js"></script>
   <script src="https://unpkg.com/chai/chai.js"></script>
@@ -20,10 +26,12 @@
   </script>
 
   <script src="../src/encode.js"></script>
+  <script src="../src/parse.js"></script>
   <script src="./test.encode.js"></script>
+  <script src="./test.parse.js"></script>
 
   <script>
-    mocha.run();
+    mocha.run(_ => document.getElementById("unittest-result").innerHTML = "");
   </script>
 </body>
 
