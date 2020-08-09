@@ -11,33 +11,33 @@ var assert = chai.assert;
 
 describe('parser helpers', function () {
 
-  describe('IntegerWithPowerFactor', function () {
+  describe('IntegerWithExpFactor', function () {
     it('positive integer', function () {
-      let n = new IntegerWithPowerFactor(123);
+      let n = new IntegerWithExpFactor(123);
       assert.isTrue(n.mant == 123n);
       assert.isTrue(n.exp == 0n);
-      assert.isTrue(n.base == 10n);
+      assert.isNull(n.base);
       assert.isFalse(n.isNeg);
     });
 
     it('negative integer', function () {
-      let n = new IntegerWithPowerFactor(-123);
+      let n = new IntegerWithExpFactor(-123);
       assert.isTrue(n.mant == -123n);
       assert.isTrue(n.exp == 0n);
-      assert.isTrue(n.base == 10n);
+      assert.isNull(n.base);
       assert.isTrue(n.isNeg);
     });
 
     it('zero', function () {
-      let n = new IntegerWithPowerFactor();
+      let n = new IntegerWithExpFactor();
       assert.isTrue(n.mant == 0n);
       assert.isTrue(n.exp == 0n);
-      assert.isTrue(n.base == 10n);
+      assert.isNull(n.base);
       assert.isFalse(n.isNeg);
     });
 
     it('negative integer by power of 2', function () {
-      let n = new IntegerWithPowerFactor(-123, 2, -45, false);
+      let n = new IntegerWithExpFactor(-123, 2, -45, false);
       assert.isTrue(n.mant == -123n);
       assert.isTrue(n.exp == -45n);
       assert.isTrue(n.base == 2n);
@@ -332,7 +332,7 @@ describe('Parser', function () {
 
         assert.isTrue(n.isNeg);
         assert.isTrue(n.mant == -10232n);
-        assert.isTrue(n.base == 10n);
+        assert.isNull(n.base);
         assert.isTrue(n.exp == 0n);
 
         assert.equal(p.unparsed, '');
@@ -346,7 +346,7 @@ describe('Parser', function () {
 
         assert.isTrue(n.isNeg);
         assert.isTrue(n.mant == -0xDEADBEEFn);
-        assert.isTrue(n.base == 10n);
+        assert.isNull(n.base);
         assert.isTrue(n.exp == 0n);
 
         assert.equal(p.unparsed, '')
@@ -456,12 +456,12 @@ describe('Parser', function () {
       it('non-integer base 8 mantissa', function () {
         let p = new Parser('8#12.34_*_10^1');
         const n = p.consumeNumber();
-        // 668 / 8^2 * 10^1 = 668 * 5^6 / 10^6 * 10^1 = 10437500 * 10^-5
+        // 668 / 8^2 * 10^1 = 668 * 5^6 / 10^6 * 10^1 = 10437500 * 10^-5 = 104375 * 10^-3
 
         assert.isFalse(n.isNeg);
-        assert.isTrue(n.mant == 10437500n);
+        assert.isTrue(n.mant == 104375n);
         assert.isTrue(n.base == 10n);
-        assert.isTrue(n.exp == -5n);
+        assert.isTrue(n.exp == -3n);
 
         assert.equal(p.unparsed, '');
         assert.equal(p.columnIndex, 14);
@@ -471,15 +471,44 @@ describe('Parser', function () {
       it('non-integer base 20 mantissa', function () {
         let p = new Parser('20#12.34_*_10^1');
         const n = p.consumeNumber();
-        // 8864 / 20^2 * 10^1 = 8864 * 5^2 / 10^4 * 10^1 = 8864 * 5^2 * 10^-3
+        // 8864 / 20^2 * 10^1 = 8864 * 5^2 / 10^4 * 10^1 = 8864 * 5^2 * 10^-3 = 2216 * 10^-1
 
         assert.isFalse(n.isNeg);
-        assert.isTrue(n.mant == 221600n);
+        assert.isTrue(n.mant == 2216n);
         assert.isTrue(n.base == 10n);
-        assert.isTrue(n.exp == -3n);
+        assert.isTrue(n.exp == -1n);
 
         assert.equal(p.unparsed, '');
         assert.equal(p.columnIndex, 15);
+        assert.equal(p.lineIndex, 0);
+      });
+
+      it('non-integer base 10 mantissa', function () {
+        let p = new Parser('6.125*2^7');
+        const n = p.consumeNumber();
+        // 6125 / 10^3 * 2^7 = 6125 / 5^3 * 2^4 = 49 * 2^4
+
+        assert.isFalse(n.isNeg);
+        assert.isTrue(n.mant == 49n);
+        assert.isTrue(n.base == 2n);
+        assert.isTrue(n.exp == 4n);
+
+        assert.equal(p.unparsed, '');
+        assert.equal(p.columnIndex, 9);
+        assert.equal(p.lineIndex, 0);
+      });
+
+      it('zero mantissa with non-zero exponent', function () {
+        let p = new Parser('-0.000*2^7');
+        const n = p.consumeNumber();
+
+        assert.isTrue(n.isNeg);
+        assert.isTrue(n.mant == 0n);
+        assert.isTrue(n.base == 2n);
+        assert.isTrue(n.exp == 0n);
+
+        assert.equal(p.unparsed, '');
+        assert.equal(p.columnIndex, 10);
         assert.equal(p.lineIndex, 0);
       });
 
@@ -579,6 +608,20 @@ describe('Parser', function () {
       assert.equal(p.lineIndex, 1);
     });
 
+  });
+
+  describe('base or no base?', function () {
+    it('zero', function () {
+      assert.isNull(new Parser('0').consumeNumber().base);
+      assert.isTrue(new Parser('0.0').consumeNumber().base == 10n);
+      assert.isTrue(new Parser('0*10^0').consumeNumber().base == 10n);
+    });
+
+    it('non-zero', function () {
+      assert.isNull(new Parser('123').consumeNumber().base);
+      assert.isTrue(new Parser('16#12.3').consumeNumber().base == 10n);
+      assert.isTrue(new Parser('12*10^3').consumeNumber().base == 10n);
+    });
   });
 
 });

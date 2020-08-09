@@ -17,11 +17,11 @@ class InputTypeError extends InputError {
 }
 
 
-class IntegerWithPowerFactor {
+class IntegerWithExpFactor {
   constructor(mant, base, exp, isNeg) {
     this.mant = BigInt(mant || 0);
-    this.base = BigInt(base || 10);
     this.exp = BigInt(exp || 0);
+    this.base = base == null ? null : BigInt(base);
     this.isNeg = (isNeg || this.mant < 0n) && this.mant <= 0n;
   }
 }
@@ -185,15 +185,18 @@ class Parser {
   }
 
 
-  // Consume unparsed text until before the first non-number character and parse it as a <number>.
-  // A non-number character is any code point different from all of these:
-  // "A" ... "Z", "a" ... "z", "0" ... "9", ".", "+", "-", "*", "/", "^", "_", "#".
+  // Consume the longest prefix of the unparsed text that is a number <number> (at least one character)
+  // an return [isNeg, mant, base, exp] as an exact representation of the parsed number.
   //
-  // Returns [isNeg, mant, base, exp] as an exact representation of the parsed number, where base is
-  // either 2n or 10n.
-  // For a number != 0: Number is mant * base^exp, mant is != 0 and isNeg is true if and only
-  // if mant < 0.
-  // For a number = 0: mant is 0.
+  // 'base' is 2n or 10n or null.
+  // 'base' is null if and only if <number> contains <mantissa> with "." or an <exp-factor>.
+  // If 'mant' = 0, 'exp' = 0.
+  // If 'mant' > 0, 'isNeg' = false.
+  // If 'mant' < 0, 'isNeg' = true.
+  //
+  // 'mant' and 'exp' are BigInt instances.
+  // If 'base' = null, the represented number is 'mant'.
+  // If 'base' != null, the represented number is 'mant' * 'base'^'exp'.
   //
   // Examples of <number>:
   //
@@ -221,7 +224,7 @@ class Parser {
   //   <decimal-digit> ::= "0" | ... | "9".
   //   <digit> ::= <decimal-digit> | "A" | ... | "Z".
 
-  consumeNumber () {  // -> IntegerWithPowerFactor(mant, powerBase, exp, isNeg) where powerBase is 2 or 10
+  consumeNumber () {  // -> IntegerWithExpFactor(mant, powerBase, exp, isNeg) where powerBase is 2 or 10 or null
     let pos = 0;  // relative to this.columnIndex
 
     // parse
@@ -230,7 +233,7 @@ class Parser {
     let mantBase = 10n;
     let mantDecimalPlaces = null;
     let mantDotPos = null;
-    let powerBase = 10n;
+    let powerBase = null;
     let exp = 0n;
 
     try {
@@ -253,7 +256,10 @@ class Parser {
         // parse mantissa
         let mantLength;
         [isNeg, mant, mantBase, mantDecimalPlaces, mantDotPos, mantLength] =
-            parseSimpleNumber(this.unparsed);
+          parseSimpleNumber(this.unparsed);
+        if (mantDecimalPlaces != null)
+          powerBase = 10n;
+
         pos += mantLength;
         expStr = this.unparsed.substring(pos);
 
@@ -289,55 +295,58 @@ class Parser {
 
     if (mantDecimalPlaces !== null) {
       // mantissa is mant / mantBase^mantDecimalPlaces with mantDecimalPlaces >= 0
-      if (mant === 0n) {
-        mantDecimalPlaces = 0n;
-      } else {
-        // normalize
-        while (mant % mantBase == 0n) {
-          mant /= mantBase;
-          mantDecimalPlaces -= 1n;
+      const origMantBase = mantBase;
+
+      while (mantBase % powerBase === 0n) {
+        // with r := mantBase / powerBase:
+        // mant / mantBase^mantDecimalPlaces * powerBase^exp
+        // = mant / (r * powerBase)^mantDecimalPlaces * powerBase^exp
+        // = mant * r^mantDecimalPlaces * powerBase^(exp - mantDecimalPlaces)
+        mantBase /= powerBase;  // = r
+        exp -= mantDecimalPlaces;
+      }
+
+      // mantBase % powerBase !== 0
+      const smallerPowerBasePrimeFactors = powerBase == 10n ? [2n, 5n] : [];
+      for (let p of smallerPowerBasePrimeFactors) {
+        while (mantBase % p === 0n) {
+          // with r := mantBase / p, s := powerBase / p:
+          // mant / mantBase^mantDecimalPlaces * 10^exp
+          // = mant / (p * r)^mantDecimalPlaces * 10^exp
+          // = mant * s^mantDecimalPlaces / (p * s * r)^mantDecimalPlaces * 10^exp
+          // = mant * s^mantDecimalPlaces / r^mantDecimalPlaces * 10^(exp - mantDecimalPlaces)
+          mantBase /= p;  // = r
+          mant *= (powerBase / p)**mantDecimalPlaces;
+          exp -= mantDecimalPlaces;
         }
       }
-      // mantissa is integer if and only iff mantDecimalPlaces = 0
 
-      if (mantDecimalPlaces > 0n) {
-          while (mantBase % powerBase === 0n) {
-            // with r := mantBase / powerBase:
-            // mant / mantBase^mantDecimalPlaces * powerBase^exp
-            // = mant / (r * powerBase)^mantDecimalPlaces * powerBase^exp
-            // = mant * r^mantDecimalPlaces * powerBase^(exp - mantDecimalPlaces)
-            mantBase /= powerBase;  // = r
-            exp -= mantDecimalPlaces;
-          }
+      // mantBase and powerBase have no common prime factors
+      while (mantBase > 1n && mantDecimalPlaces > 0n) {
+        if (mant % mantBase != 0n)
+          throw new InputError(
+            `non-integer mantissa in base ${origMantBase} cannot be ` +
+            `represented exactly in base ${powerBase}`,
+            this.columnIndex + (mantDotPos || 0), this.lineIndex);
+        mant /= mantBase;
+        mantDecimalPlaces -= 1n;
+      }
 
-          // mantBase % powerBase !== 0
-          const smallerPowerBasePrimeFactors = powerBase == 10n ? [2n, 5n] : [];
-          for (let p of smallerPowerBasePrimeFactors) {
-            while (mantBase % p === 0n) {
-              // with r := mantBase / p, s := powerBase / p:
-              // mant / mantBase^mantDecimalPlaces * 10^exp
-              // = mant / (p * r)^mantDecimalPlaces * 10^exp
-              // = mant * s^mantDecimalPlaces / (p * s * r)^mantDecimalPlaces * 10^exp
-              // = mant * s^mantDecimalPlaces / r^mantDecimalPlaces * 10^(exp - mantDecimalPlaces)
-              mantBase /= p;  // = r
-              mant *= (powerBase / p)**mantDecimalPlaces;
-              exp -= mantDecimalPlaces;
-            }
-          }
-
-          // mantBase and powerBase have no common prime factors
-          if (mantBase !== 1n)
-            throw new InputError(
-              `non-integer mantissa in base ${mantBase} cannot be ` +
-              `represented exactly in base ${powerBase}`,
-              this.columnIndex + (mantDotPos || 0), this.lineIndex);
+      // normalize
+      if (mant == 0n) {
+        exp = 0n;
+      } else {
+        while (mant % powerBase == 0n) {
+          mant /= powerBase;
+          exp += 1n;
+        }
       }
     }
 
     this.unparsed = this.unparsed.substring(pos);
     this.columnIndex += pos;
 
-    return new IntegerWithPowerFactor(mant, powerBase, exp, isNeg);
+    return new IntegerWithExpFactor(mant, powerBase, exp, isNeg);
   }
 
 }
