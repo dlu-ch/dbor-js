@@ -5,10 +5,9 @@
 // https://www.ecma-international.org/ecma-262/11.0/
 
 class InputError extends Error {
-  constructor(message, columnIndex = 0, lineIndex = 0) {
+  constructor(message, index = 0) {
     super(message);
-    this.columnIndex = columnIndex;  // 0-based character index of in line 'lineIndex'
-    this.lineIndex = lineIndex; // 0-based index of input line containing first invalid character
+    this.index = index;  // 0-based index of first invalid UTF-16 code unit in input
   }
 }
 
@@ -26,6 +25,29 @@ class IntegerWithExpFactor {
   }
 }
 
+
+function makeIndexRelativeToLine (index, text = '') {  // -> [lineIndex, columnIndex]
+  text = String(text);
+  index = Number(index);
+
+  let lineIndex = 0;
+  let columnIndex = 0;
+
+  let i = 0;
+  let j = Math.min(Number(index), text.length);
+  for (i = 0; i < j; i += 1) {
+    if (text[i] == '\n' || text[i] == '\r') {
+      if (text[i] == '\r' && i + 1 < text.length && text[i + 1] == '\n')  // CR LF?
+        i += 1;
+      lineIndex += 1;
+      columnIndex = 0;
+    } else {
+      columnIndex += 1;
+    }
+  }
+
+  return [lineIndex, columnIndex + index - j];
+}
 
 
 // Parse the longest non-empty prefix of text that matches <number> as a number.
@@ -57,7 +79,7 @@ function parseSimpleNumber (text) {  // -> [isNeg: bool, value: BigInt, base: Bi
   text = String(text);
   let m = text.match(/^([+-])?[0-9]/);
   if (!m)
-    throw new InputTypeError('not a number', 0);
+    throw new InputTypeError('missing number', 0);
 
   const isNeg = m[1] == '-';
   const afterSignPos = (m[1] || '').length;
@@ -92,13 +114,13 @@ function parseSimpleNumber (text) {  // -> [isNeg: bool, value: BigInt, base: Bi
           decimalPlaces += 1n;
       } else if (text[pos] == '_') {
         if (lastUnderscorePos !== null && lastUnderscorePos + 1 == pos)
-          throw new InputError("surplus '_'", pos);
+          throw new InputError("surplus '_' in number", pos);
         if (lastDotPos !== null && lastDotPos + 1 == pos)
           throw new InputError("missing digit after '.'", pos);
         lastUnderscorePos = pos;
       } else if (text[pos] == '.') {
         if (lastDotPos !== null)
-          throw new InputError("surplus '.'", pos);
+          throw new InputError("surplus '.' in number", pos);
         lastDotPos = pos;
         decimalPlaces = 0n;
       } else {
@@ -123,7 +145,7 @@ function parseSimpleNumber (text) {  // -> [isNeg: bool, value: BigInt, base: Bi
       break;
 
     if (hasExplicitBase)
-      throw new InputError("surplus '#'", pos);
+      throw new InputError("surplus '#' in number", pos);
     if (lastUnderscorePos !== null)
       throw new InputError("invalid in number base: '_'", lastUnderscorePos);
     if (lastDotPos !== null)
@@ -156,32 +178,23 @@ function parseSimpleInteger (text) {  // -> [isNeg: bool, absValue: BigInt, pars
 class Parser {
 
   constructor (text) {
-    this.unparsed = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-    this.columnIndex = 0; // 0 based
-    this.lineIndex = 0;  // 0 based
+    this.unparsed = String(text);
+    this.index = 0; // current position in input; 0 based, UTF-16 code units (not codepoints)
+  }
+
+
+  advance (n = 1) {
+    n = Number(n);
+    this.unparsed = this.unparsed.substring(n);
+    this.index += n;
   }
 
 
   // Remove all characters with code points <= U+0020 at the beginning of the unparsed string.
   consumeOptionalWhitespace () {
-    while (true) {
-      // remove all code points <= U+0020 except '\n'
-      let i = 0;
-      while (i < this.unparsed.length && this.unparsed.charCodeAt(i) <= 0x20 && this.unparsed[i] != '\n')
-        i += 1;
-      this.unparsed = this.unparsed.substring(i);
-      this.columnIndex += i;
-
-      // remove '\n'
-      i = 0;
-      while (i < this.unparsed.length && this.unparsed[i] == '\n')
-        i += 1;
-      if (i <= 0)
-        break;
-      this.unparsed = this.unparsed.substring(i);
-      this.columnIndex = 0;
-      this.lineIndex += i;
-    }
+    let n;
+    for (n = 0; n < this.unparsed.length && this.unparsed.charCodeAt(n) <= 0x20; n += 1);
+    this.advance(n);
   }
 
 
@@ -225,7 +238,7 @@ class Parser {
   //   <digit> ::= <decimal-digit> | "A" | ... | "Z".
 
   consumeNumber () {  // -> IntegerWithExpFactor(mant, powerBase, exp, isNeg) where powerBase is 2 or 10 or null
-    let pos = 0;  // relative to this.columnIndex
+    let pos = 0;  // relative to this.index
 
     // parse
     let isNeg = false;
@@ -239,8 +252,8 @@ class Parser {
     try {
 
       let invertExp = false;
-      let expStr;
-      let powerBaseStr;
+      let expStr = null;
+      let powerBaseStr = null;
 
       let m = this.unparsed.match(/^([+-]?)(2|10)\^/);
       if (m) {  // e.g. '-10^-42'
@@ -261,16 +274,16 @@ class Parser {
           powerBase = 10n;
 
         pos += mantLength;
-        expStr = this.unparsed.substring(pos);
 
-        m = expStr.match(/^_?([*/])_?(2|10)\^/);
+        const potentialExpStr = this.unparsed.substring(pos);
+        m = potentialExpStr.match(/^_?([*/])_?(2|10)\^/);
         if (m) {
           invertExp = m[1] == '/';
           powerBaseStr = m[2];
-          expStr = expStr.substring(m[0].length);
+          expStr = potentialExpStr.substring(m[0].length);
           pos += m[0].length;
-        } else if (expStr.match(/^[0-9A-Z_^*/+-]/)) {
-          throw new InputError('unexpected in number', 0);
+        } else if (potentialExpStr.match(/^[0-9A-Z_^*/+-]/)) {
+            throw new InputError('missing digit or exponentiation factor', 0);
         }
       }
 
@@ -288,7 +301,7 @@ class Parser {
       if (!(error instanceof InputError))
         throw error;
       throw new error.constructor(
-        error.message, this.columnIndex + pos + error.columnIndex, this.lineIndex);
+        error.message, this.index + pos + error.index);
     }
 
     // transform
@@ -327,7 +340,7 @@ class Parser {
           throw new InputError(
             `non-integer mantissa in base ${origMantBase} cannot be ` +
             `represented exactly in base ${powerBase}`,
-            this.columnIndex + (mantDotPos || 0), this.lineIndex);
+            this.index + (mantDotPos || 0));
         mant /= mantBase;
         mantDecimalPlaces -= 1n;
       }
@@ -343,9 +356,7 @@ class Parser {
       }
     }
 
-    this.unparsed = this.unparsed.substring(pos);
-    this.columnIndex += pos;
-
+    this.advance(pos);
     return new IntegerWithExpFactor(mant, powerBase, exp, isNeg);
   }
 
