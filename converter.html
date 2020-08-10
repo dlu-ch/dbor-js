@@ -68,7 +68,7 @@ Requires browser supports of:
       <p></p>
       <table class="alignonly">
         <tr>
-          <td class="firstcol"><button id="button-encode">Encode</button></td>
+          <td class="firstcol"><button id="button-encode" title="Ctrl+Enter">Encode</button></td>
           <td><span id="span-encoding-error">&#x26A0; Browser does not comply with ECMAScript 2020 or scripts are (partially) disabled.</span></td>
         </tr>
       </table>
@@ -84,10 +84,9 @@ Requires browser supports of:
     <script type="text/javascript">
       "use strict";
 
-      // TODO convert with Ctrl + Enter
       // TODO jump to input on click on line:column of error
-      // TODO improve error encoder messages
       // TODO group bytes by encoded object and link objects with corresponding bytes
+      // TODO improve error encoder messages
 
       function setEncodingState (isComplete = false, outputBytes = null, errorMessage = null) {
         const representationElement = document.getElementById('div-representation');
@@ -157,11 +156,24 @@ Requires browser supports of:
 
       }
 
-      document.getElementById('textarea-input').oninput = markInputAsChanged;
+      BigInt(0);  // introduced with ECMAScript 2020
+
+      const inputElement = document.getElementById('textarea-input');
+      inputElement.oninput = markInputAsChanged;
+      inputElement.onkeypress = function (event) {
+        let ctrlPlusEnterPressed = false;
+        try{ ctrlPlusEnterPressed = event.ctrlKey && event.code == 'Enter' } catch (e) {};
+        if (ctrlPlusEnterPressed)
+          encodeInput();
+      };
       document.getElementById('button-encode').onclick = encodeInput;
 
-      BigInt(0);  // introduced with ECMAScript 2020
-      markInputAsChanged();  // replace static content that basically says: "not working"
+      const initialInput = new URL(window.location).searchParams.get('q');
+      if (initialInput !== null) {
+        inputElement.value = initialInput;
+        encodeInput();
+      } else
+        markInputAsChanged();  // replace static content that basically says: "not working"
     </script>
   </body>
 
