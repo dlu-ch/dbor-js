@@ -37,9 +37,9 @@ textobj.IntegerWithExpFactor = class extends textobj.Object {
 
 
 // Input from UTF-16 code unit 'index' to UTF-16 code unit
-// 'index' + 'length' - 1 that represents an object 'obj'.
+// 'index' + 'length' - 1 with (optional) associated object 'object'.
 
-textobj.InputRangeWithObject = class {
+textobj.InputRange = class {
   constructor(index, length, object = null) {
     this.index = Number(index || 0);
     this.length = Number(length || 0);
@@ -385,7 +385,7 @@ textobj.Parser = class {
 
   // TODO test
 
-  parse () {  // [ InputRangeWithObject(), ...]
+  parse () {  // [ InputRange(), ...]
     let objects = [];
 
     while (true) {
@@ -393,7 +393,7 @@ textobj.Parser = class {
 
       const startIndex = this.index;
       const number = this.consumeNumber();
-      objects.push(new textobj.InputRangeWithObject(startIndex, this.index - startIndex - 1, number));
+      objects.push(new textobj.InputRange(startIndex, this.index - startIndex, number));
 
       this.consumeOptionalWhitespace();
       if (!this.unparsed)

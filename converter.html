@@ -37,21 +37,52 @@ Requires browser supports of:
         padding-left: 0px;
       }
 
-      div#div-representation textarea {
+      div#div-representation textarea.input,
+      div#div-representation div.noninput {
+        font-size: smaller;
+        font-family: 'Courier New', Courier, monospace;
         padding: 0.5ex;
+        border: 1px inset #ccc;
         border-left: 3px solid;
-        border-right: 1px;
         border-left-color: gray;
+        overflow: auto;  /* scrollbar if content too large */
       }
-      div#div-representation.invalid textarea#textarea-input {
+      div#div-representation.invalid textarea.input {
         border-left-color: red;
       }
-      div#div-representation.valid textarea#textarea-input {
+      div#div-representation.valid textarea.input {
         border-left-color: RoyalBlue;
       }
       div#div-representation #span-encoding-error {
         color: red;
       }
+
+      span.sequence span.firstinsequence {
+        font-weight: bold;
+      }
+      span.sequence.dbor-number span.firstinsequence,
+      span.sequence.dbor-numberlike span.firstinsequence {
+        color: black;
+      }
+
+      a.underlinedonhover {
+        border-bottom: none;
+        text-decoration: none;
+      }
+      a.underlinedonhover:hover {
+        border-bottom: 1px dotted;
+      }
+
+      a.underlined {
+        border-bottom: 1px dotted;
+        text-decoration: none;
+      }
+
+      a.withinheritedcolor,
+      a.withinheritedcolor:hover {
+        color: inherit;
+      }
+
     </style>
   </head>
 
@@ -61,6 +92,7 @@ Requires browser supports of:
         Objects to encode:
         <!-- note: placeholder is not supported by HTML 4.01 -->
         <textarea id="textarea-input" rows="1" cols="1" placeholder="e.g '12.5*2^-6, 16#FFFF_BEAF'"
+                  class="input"
                   style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre">
         </textarea>
       </div>
@@ -76,32 +108,63 @@ Requires browser supports of:
 
       <div class="textareacontainer">
         Corresponding DBOR encoded byte sequence:
-        <textarea id="textarea-dborbytes" readonly rows="1" cols="1"
-                  style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex"></textarea>
+        <div id="div-dborbytes" class="noninput"
+             style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex">
+        </div>
       </div>
     </div>
 
     <script type="text/javascript">
       "use strict";
 
-      // TODO jump to input on click on line:column of error
-      // TODO group bytes by encoded object and link objects with corresponding bytes
-      // TODO improve error encoder messages
-
-      function setEncodingState (isComplete = false, outputBytes = null, errorMessage = null) {
+      function setEncodingState (isComplete = false, inputRangesWithEncodedObjects = null, errorMarkup = null) {
         const representationElement = document.getElementById('div-representation');
-        const outputElement = document.getElementById('textarea-dborbytes');
+        const outputElement = document.getElementById('div-dborbytes');
         const stateElement = document.getElementById('span-encoding-error');
         const encodeButtonElement = document.getElementById('button-encode');
 
-        const stringifiedBytes = outputBytes ? outputBytes.map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(', ') : [];
-        outputElement.value = stringifiedBytes;
+        if (inputRangesWithEncodedObjects) {
+          let outputMarkups = [];
+          const byteSeparator = ' ';
+          for (let r of inputRangesWithEncodedObjects) {
+            const [dborClass, bytes] = r.object;
+            let cssClass = dborClass.toLowerCase();
+            cssClass = cssClass.match(/^[a-z]+$/) ? `dbor-${cssClass}` : '';
+            const hexBytes = bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase());
+            if (hexBytes.length > 0) {
+              let s = `<span class="firstinsequence">${hexBytes[0]}</span>`;
+              if (hexBytes.length > 1)
+                s += byteSeparator + hexBytes.slice(1).join(byteSeparator);
+              const outputMarkup =
+                `<span class="sequence ${cssClass}">` +
+                  `<a class="withinheritedcolor underlinedonhover" href="javascript:selectInInput(${r.index}, ${r.length})">` +
+                    `${s}` +
+                  `</a>` +
+                `</span>`;
+              outputMarkups.push(outputMarkup);
+            }
+          }
+          outputElement.innerHTML = outputMarkups.join(byteSeparator);
+        } else {
+          outputElement.innerText = '';
+        }
 
-        representationElement.classList.toggle('invalid', errorMessage);
-        representationElement.classList.toggle('valid', !errorMessage && outputBytes);
+        representationElement.classList.toggle('invalid', errorMarkup);
+        representationElement.classList.toggle('valid', !errorMarkup && inputRangesWithEncodedObjects);
 
-        stateElement.textContent = errorMessage || '';
+        stateElement.innerHTML = errorMarkup ? `\u{26A0} ${errorMarkup}` : '';
         encodeButtonElement.disabled = isComplete;
+      }
+
+
+      function selectInInput (index, length = 0) {
+        index = Number(index);
+        length = Number(length);
+        if (index >= 0 && length >= 0) {
+          const inputElement = document.getElementById('textarea-input');
+          inputElement.focus();
+          inputElement.setSelectionRange(index, index + length);  // index: UTF-16 code units (not codepoints)
+        }
       }
 
 
@@ -114,44 +177,64 @@ Requires browser supports of:
         const inputElement = document.getElementById('textarea-input');
 
         const input = inputElement.value || '';
-        let encoder = new dbor.Encoder();
 
         try {
           let inputRangesWithObjects = new textobj.Parser(input).parse();
+          let inputRangesWithEncodedObjects = [];
 
           for (let inputRangeWithObject of inputRangesWithObjects) {
             const object = inputRangeWithObject.object;
             try {
+              let encoder = new dbor.Encoder();
+
               if (!(object instanceof textobj.IntegerWithExpFactor))
                 throw new TypeError('unsupported type');
+
+              // TODO improve error encoder messages
+
               const number = object;
-              if (number.mant === 0n && number.isNeg)
-                encoder.appendMinusZero()
-              else if (!number.base)
-                encoder.appendInteger(number.mant)
-              else if (number.base === 10n)
-                encoder.appendDecimalRational(number.mant, number.exp)
-              else
+              let dborClass = 'Number';
+              if (number.mant === 0n && number.isNeg) {
+                encoder.appendMinusZero();
+                dborClass = 'Numberlike';
+              } else if (!number.base) {
+                encoder.appendInteger(number.mant);
+              } else if (number.base === 10n) {
+                if (number.exp != 0n)
+                  encoder.appendDecimalRational(number.mant, number.exp)
+                else
+                  encoder.appendInteger(number.mant)
+              } else {
                 encoder.appendBinaryRational(number.mant, number.exp);
+              }
+
+              inputRangesWithEncodedObjects.push(
+                new textobj.InputRange(
+                  inputRangeWithObject.index, inputRangeWithObject.length,
+                  [dborClass, encoder.bytes]));
             } catch (error) {
               throw new textobj.InputError(error.message, inputRangeWithObject.index);
             }
           }
 
-          setEncodingState(true, encoder.bytes);
+          setEncodingState(true, inputRangesWithEncodedObjects);
 
         } catch (error) {
-          let errorMsg = error.message;
+          const node = document.createElement('span');
+          node.textContent = error.message;
+          let errorMarkup = node.innerHTML;
 
           if (error instanceof textobj.InputError) {
             let [lineIndex, columnIndex] = textobj.makeIndexRelativeToLine(error.index, input);
-            errorMsg = `\u{26A0} line ${lineIndex + 1}:${columnIndex + 1}: ${errorMsg}`;
-            // set cursor immediately before first invalid character
-            inputElement.focus();
-            inputElement.setSelectionRange(error.index, error.index);  // index: UTF-16 code units (not codepoints)
+            const linenoMarkup =
+              `<span class="lineno"><a class="withinheritedcolor underlined" href="javascript:selectInInput(${error.index})">` +
+                `line ${lineIndex + 1}:${columnIndex + 1}` +
+              `</a></span>`;
+            errorMarkup = `${linenoMarkup}: ${errorMarkup}`;
+            selectInInput(error.index);  // set cursor immediately before first invalid character
           }
 
-          setEncodingState(true, [], errorMsg);
+          setEncodingState(true, [], errorMarkup);
         }
 
       }
@@ -162,7 +245,10 @@ Requires browser supports of:
       inputElement.oninput = markInputAsChanged;
       inputElement.onkeypress = function (event) {
         let ctrlPlusEnterPressed = false;
-        try{ ctrlPlusEnterPressed = event.ctrlKey && event.code == 'Enter' } catch (e) {};
+        try {
+          ctrlPlusEnterPressed = event.ctrlKey &&
+            (event.code == 'Enter' || event.code == 'NumpadEnter')
+        } catch (e) {};
         if (ctrlPlusEnterPressed)
           encodeInput();
       };
