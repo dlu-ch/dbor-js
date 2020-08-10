@@ -12,7 +12,7 @@ Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
     <title>Encode to DBOR</title>
 
     <!-- avoid import (not usable with local files due to CORS restrictions e.g. in Firefox 68) -->
-    <script type="text/javascript" src="./src/encode.js"></script>
+    <script type="text/javascript" src="./src/dbor-encode.js"></script>
     <script type="text/javascript" src="./src/textobj-parse.js"></script>
 
     <style>
@@ -120,7 +120,7 @@ Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
 
       const input = inputElement.value || '';
       let parser = new textobj.Parser(input);
-      let encoder = new DborEncoder();
+      let encoder = new dbor.Encoder();
 
       try {
         while (true) {

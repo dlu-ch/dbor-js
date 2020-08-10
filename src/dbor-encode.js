@@ -2,10 +2,14 @@
 // dbor-js - ECMAScript 2020 implementation of DBOR encoder
 // Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
 
-// https://tc39.es/ecma262/2020//
+// https://www.ecma-international.org/ecma-262/11.0/
+
+"use strict";
+
+let dbor = {};  // name space
 
 
-function trailingZeroBitCount (v) {
+dbor.trailingZeroBitCount = function (v) {
   v = BigInt(v);
   if (v == 0n)
     return -1n;
@@ -15,11 +19,11 @@ function trailingZeroBitCount (v) {
     n += 1;
   }
   return n;
-}
+};
 
 
 // Returns smallest i in the range -1 ... n such that 2^i >= v or n if no such i.
-function boundedFloorLog2 (v, n) {
+dbor.boundedFloorLog2 = function (v, n) {
   v = BigInt(v);
   n = BigInt(n);
 
@@ -36,10 +40,10 @@ function boundedFloorLog2 (v, n) {
   }
 
   return n;
-}
+};
 
 
-function binaryRationalPForMinPAndR (p, r) {  // -> p from [4, 10, 16, 23, 30, 37, 44, 52]
+dbor.binaryRationalPForMinPAndR = function (p, r) {  // -> p from [4, 10, 16, 23, 30, 37, 44, 52]
   p = Number(p);
   r = Number(r);
 
@@ -51,12 +55,12 @@ function binaryRationalPForMinPAndR (p, r) {  // -> p from [4, 10, 16, 23, 30, 3
     k = Math.max(k, r < 9 ? Math.floor(r / 2) - 1 : Math.min(11, r) - 5);
 
   return [4, 10, 16, 23, 30, 37, 44, 52][k];
-}
+};
 
 
 // Return its UTF-8 encoding (as an array of integer 0x00 ... 0xFF) if the non-negative integer *codePoint*
 // is a valid Unicode code point (in the range 0 .. 0xD7FF or 0xE000 .. 0x10FFFF) and [] otherwise.
-function encodeCodePointAsUtf8 (codePoint) {
+dbor.encodeCodePointAsUtf8 = function (codePoint) {
   if (codePoint < 0)
     return [];
   if (codePoint <= 0x7F)
@@ -71,10 +75,10 @@ function encodeCodePointAsUtf8 (codePoint) {
   if (codePoint <= 0x10FFFF)
     return [0xF0 | codePoint >> 18, 0x80 | ((codePoint >> 12) & 0x3F), 0x80 | ((codePoint >> 6) & 0x3F), 0x80 | codePoint & 0x3F];
   return [];
-}
+};
 
 
-function encodeNaturalTokenData (value) {
+dbor.encodeNaturalTokenData = function (value) {
   value = BigInt(value);
 
   if (value <= 0n)
@@ -89,22 +93,22 @@ function encodeNaturalTokenData (value) {
           throw new RangeError('too large');
   }
   return s;
-}
+};
 
 
-function encodeIntegerToken (h, value) {
+dbor.encodeIntegerToken = function (h, value) {
   if (value < 0)
     throw new RangeError(`expected non-negative 'value', got ${value}`);
 
   let first = (Number(h) & 7) << 5;
   if (value <= 0x17)
     return [first | Number(value)];
-  const data = encodeNaturalTokenData(BigInt(value) - 0x17n);
+  const data = dbor.encodeNaturalTokenData(BigInt(value) - 0x17n);
   return [first | 0x18 | (data.length - 1)].concat(data);
-}
+};
 
 
-function encodePowerOfTenToken (value) {
+dbor.encodePowerOfTenToken = function (value) {
   value = BigInt(value);
   if (value == 0)
     throw new RangeError('must not be 0');
@@ -113,13 +117,13 @@ function encodePowerOfTenToken (value) {
   const h = 0xC0 | (value < 0 ? 8 : 0);
   if (valueAbs <= 8n)
     return [h | 0x20 | (Number(valueAbs) - 1)];
-  const data = encodeNaturalTokenData(valueAbs - 8n);
+  const data = dbor.encodeNaturalTokenData(valueAbs - 8n);
   return [h | 0x10 | (data.length - 1)].concat(data);
-}
+};
 
 
 // Return [mant, exp2] such that mant * 2^exp2 = value and 2^52 <= |mant| < 2^53.
-function splitFiniteNumberIntoBinaryRationalComponents (value) {
+dbor.splitFiniteNumberIntoBinaryRationalComponents = function (value) {
   if (!Number.isFinite(value))
     throw new RangeError("'value' must be finite number");  // also if not a Number
 
@@ -143,14 +147,14 @@ function splitFiniteNumberIntoBinaryRationalComponents (value) {
   // 2^52 <= mantAbs < 2^53
 
   return [BigInt(value < 0 ? -mantAbs : mantAbs), exp2];
-}
+};
 
 
 // Return [isNeg, mantNorm, exp2Norm] where
 // 0 <= mantNorm < 2^53, -1022 - 52 <= exp2Norm <= 1024 - 52, such that
 // |mantNorm| * 2^exp2Norm = |mant| * 2^exp2 and mant >= 2^52 for exp2 > -1022 - 52
 // and mant < 2^52 for exp2 = -1022 - 52.
-function normalizeBinaryRationalComponents (mant, exp2) {
+dbor.normalizeBinaryRationalComponents = function (mant, exp2) {
   mant = BigInt(mant);
   exp2 = BigInt(exp2);
 
@@ -189,11 +193,11 @@ function normalizeBinaryRationalComponents (mant, exp2) {
   }
 
   return [isNeg, mantNormAbs, Number(exp2Norm)];
-}
+};
 
 
-function encodeCanonicalBinaryRationalToken (mant, exp2) {
-  let [isNeg, mantNorm, exp2Norm] = normalizeBinaryRationalComponents(mant, exp2)
+dbor.encodeCanonicalBinaryRationalToken = function (mant, exp2) {
+  let [isNeg, mantNorm, exp2Norm] = dbor.normalizeBinaryRationalComponents(mant, exp2)
   if (mantNorm == 0n)
     throw new RangeError('must not be 0');
 
@@ -216,12 +220,12 @@ function encodeCanonicalBinaryRationalToken (mant, exp2) {
   } else {  // normalized
     const exp2NormOffset = exp2Norm + 52;  // -1023 .. 1024
 
-    let p = 52 - trailingZeroBitCount(mantNorm);
+    let p = 52 - dbor.trailingZeroBitCount(mantNorm);
     // 0 <= p <= 52: number of necessary mantissa bits if normalized (without hidden bit)
-    let r = boundedFloorLog2(exp2NormOffset < 0 ? -exp2NormOffset + 1 : exp2NormOffset, 10) + 1n;
+    let r = dbor.boundedFloorLog2(exp2NormOffset < 0 ? -exp2NormOffset + 1 : exp2NormOffset, 10) + 1n;
     // -1 <= r <= 10: number of necessary exponent bits if normalized
 
-    p = binaryRationalPForMinPAndR(p, r);
+    p = dbor.binaryRationalPForMinPAndR(p, r);
     k = Math.floor(p / 7);
     r = 8 * k + 7 - p;
     binary = (mantNorm - (1n << 52n)) >> BigInt(52 - p);  // normalized
@@ -239,12 +243,12 @@ function encodeCanonicalBinaryRationalToken (mant, exp2) {
   }
 
   return bytes;
-}
+};
 
 
-class DborEncoder {
+dbor.Encoder = class {
   constructor() {
-    this.bytes = [];
+    this.bytes = [];  // TODO to Uint8Array?
   }
 
   // Append a NoneValue.
@@ -275,7 +279,7 @@ class DborEncoder {
   // Throws RangeError if *value* not in the range -18'519'084'246'547'628'312 .. 18'519'084'246'547'628'311.
   appendInteger (value) {
     value = BigInt(value);
-    const bytes = (value >= 0n) ? encodeIntegerToken(0, value) : encodeIntegerToken(1, -(value + 1n));
+    const bytes = (value >= 0n) ? dbor.encodeIntegerToken(0, value) : dbor.encodeIntegerToken(1, -(value + 1n));
     this.bytes = this.bytes.concat(bytes);
     return this;
   }
@@ -295,7 +299,7 @@ class DborEncoder {
 
     exp2 = BigInt(exp2);
     if (Number.isFinite(mant)) { // false for BigInt
-      let [mantm, exp2m] = splitFiniteNumberIntoBinaryRationalComponents(mant);
+      let [mantm, exp2m] = dbor.splitFiniteNumberIntoBinaryRationalComponents(mant);
       mant = mantm;
       exp2 += BigInt(exp2m);
     }
@@ -304,7 +308,7 @@ class DborEncoder {
     if (mant == 0n)
       return this.appendInteger(0);
 
-    const bytes = encodeCanonicalBinaryRationalToken(mant, exp2);
+    const bytes = dbor.encodeCanonicalBinaryRationalToken(mant, exp2);
     this.bytes = this.bytes.concat(bytes);
     return this;
   }
@@ -319,7 +323,7 @@ class DborEncoder {
     if (mant == 0n || exp10 == 0n)
       return this.appendInteger(mant);
 
-    const bytes = encodePowerOfTenToken(exp10).concat(new DborEncoder().appendInteger(mant).bytes);
+    const bytes = dbor.encodePowerOfTenToken(exp10).concat(new this.constructor().appendInteger(mant).bytes);
     this.bytes = this.bytes.concat(bytes);
     return this;
   }
@@ -335,7 +339,7 @@ class DborEncoder {
       bytes.push(n);
     });
 
-    this.bytes = this.bytes.concat(encodeIntegerToken(2, bytes.length)).concat(bytes);
+    this.bytes = this.bytes.concat(dbor.encodeIntegerToken(2, bytes.length)).concat(bytes);
     return this;
   }
 
@@ -349,7 +353,7 @@ class DborEncoder {
 
     let bytes = [];
     codepoints.forEach(c => {
-      let b = encodeCodePointAsUtf8(c);
+      let b = dbor.encodeCodePointAsUtf8(c);
       if (b.length <= 0) {
         let cp = c.toString(16).toUpperCase();
         throw new RangeError(`not a valid code point: 0x${cp}`);
@@ -357,8 +361,8 @@ class DborEncoder {
       bytes = bytes.concat(b);
     });
 
-    this.bytes = this.bytes.concat(encodeIntegerToken(3, bytes.length)).concat(bytes);
+    this.bytes = this.bytes.concat(dbor.encodeIntegerToken(3, bytes.length)).concat(bytes);
     return this;
   }
 
-}
+};
