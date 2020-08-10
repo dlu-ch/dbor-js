@@ -21,12 +21,29 @@ textobj.InputTypeError = class extends textobj.InputError {
 };
 
 
-textobj.IntegerWithExpFactor = class {
+textobj.Object = class {
+};
+
+
+textobj.IntegerWithExpFactor = class extends textobj.Object {
   constructor(mant, base, exp, isNeg) {
+    super();
     this.mant = BigInt(mant || 0);
     this.exp = BigInt(exp || 0);
     this.base = base == null ? null : BigInt(base);
     this.isNeg = (isNeg || this.mant < 0n) && this.mant <= 0n;
+  }
+};
+
+
+// Input from UTF-16 code unit 'index' to UTF-16 code unit
+// 'index' + 'length' - 1 that represents an object 'obj'.
+
+textobj.InputRangeWithObject = class {
+  constructor(index, length, object = null) {
+    this.index = Number(index || 0);
+    this.length = Number(length || 0);
+    this.object = object;
   }
 };
 
@@ -363,6 +380,32 @@ textobj.Parser = class {
 
     this.advance(pos);
     return new textobj.IntegerWithExpFactor(mant, powerBase, exp, isNeg);
+  }
+
+
+  // TODO test
+
+  parse () {  // [ InputRangeWithObject(), ...]
+    let objects = [];
+
+    while (true) {
+      this.consumeOptionalWhitespace();
+
+      const startIndex = this.index;
+      const number = this.consumeNumber();
+      objects.push(new textobj.InputRangeWithObject(startIndex, this.index - startIndex - 1, number));
+
+      this.consumeOptionalWhitespace();
+      if (!this.unparsed)
+        break;
+
+      if (this.unparsed[0] != ',')
+        throw new textobj.InputError("missing ','", this.index);
+
+      this.advance();
+    }
+
+    return objects;
   }
 
 };

@@ -2,20 +2,26 @@
 SPDX-License-Identifier: LGPL-3.0-or-later
 dbor-js - ECMAScript 2020 implementation of DBOR encoder
 Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
+
+Requires browser supports of:
+- HTML compliant with https://www.w3.org/TR/html401/
+- CSS compliant with https://www.w3.org/TR/css-values-3/
+- W3C DOM compliant with https://www.w3.org/TR/dom41/
+- ECMAScript 2020 compliant with https://www.ecma-international.org/ecma-262/11.0/
 -->
 
-<!DOCTYPE html>
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html lang="en">
-
   <head>
-    <meta charset="utf-8">
     <title>Encode to DBOR</title>
+
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
     <!-- avoid import (not usable with local files due to CORS restrictions e.g. in Firefox 68) -->
     <script type="text/javascript" src="./src/dbor-encode.js"></script>
     <script type="text/javascript" src="./src/textobj-parse.js"></script>
 
-    <style>
+    <style type="text/css">
       body {
         font-family: Helvetica, Arial, sans-serif;
       }
@@ -51,123 +57,112 @@ Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
 
   <body>
     <div id="div-representation">
-      <form>
-        <label for="textarea-input">Objects to encode:</label>
-        <div class="textareacontainer">
-          <textarea id="textarea-input" autofocus="true" placeholder="e.g '12.5*2^-6, 16#FFFF_BEAF'"
-                    style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre">
-          </textarea>
-        </div>
-      </form>
+      <div class="textareacontainer">
+        Objects to encode:
+        <!-- note: placeholder is not supported by HTML 4.01 -->
+        <textarea id="textarea-input" rows="1" cols="1" placeholder="e.g '12.5*2^-6, 16#FFFF_BEAF'"
+                  style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre">
+        </textarea>
+      </div>
 
-      <p>
+      <p></p>
       <table class="alignonly">
         <tr>
           <td class="firstcol"><button id="button-encode">Encode</button></td>
           <td><span id="span-encoding-error">&#x26A0; Browser does not comply with ECMAScript 2020 or scripts are (partially) disabled.</span></td>
         </tr>
       </table>
-      </p>
+      <p></p>
 
       <div class="textareacontainer">
-        <label for="textarea-dborbytes">Corresponding DBOR encoded byte sequence:</label>
-        <textarea id="textarea-dborbytes" readonly style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex"></textarea>
+        Corresponding DBOR encoded byte sequence:
+        <textarea id="textarea-dborbytes" readonly rows="1" cols="1"
+                  style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex"></textarea>
       </div>
     </div>
 
+    <script type="text/javascript">
+      "use strict";
+
+      // TODO convert with Ctrl + Enter
+      // TODO jump to input on click on line:column of error
+      // TODO improve error encoder messages
+      // TODO group bytes by encoded object and link objects with corresponding bytes
+
+      function setEncodingState (isComplete = false, outputBytes = null, errorMessage = null) {
+        const representationElement = document.getElementById('div-representation');
+        const outputElement = document.getElementById('textarea-dborbytes');
+        const stateElement = document.getElementById('span-encoding-error');
+        const encodeButtonElement = document.getElementById('button-encode');
+
+        const stringifiedBytes = outputBytes ? outputBytes.map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(', ') : [];
+        outputElement.value = stringifiedBytes;
+
+        representationElement.classList.toggle('invalid', errorMessage);
+        representationElement.classList.toggle('valid', !errorMessage && outputBytes);
+
+        stateElement.textContent = errorMessage || '';
+        encodeButtonElement.disabled = isComplete;
+      }
+
+
+      function markInputAsChanged () {
+        setEncodingState();
+      }
+
+
+      function encodeInput () {
+        const inputElement = document.getElementById('textarea-input');
+
+        const input = inputElement.value || '';
+        let encoder = new dbor.Encoder();
+
+        try {
+          let inputRangesWithObjects = new textobj.Parser(input).parse();
+
+          for (let inputRangeWithObject of inputRangesWithObjects) {
+            const object = inputRangeWithObject.object;
+            try {
+              if (!(object instanceof textobj.IntegerWithExpFactor))
+                throw new TypeError('unsupported type');
+              const number = object;
+              if (number.mant === 0n && number.isNeg)
+                encoder.appendMinusZero()
+              else if (!number.base)
+                encoder.appendInteger(number.mant)
+              else if (number.base === 10n)
+                encoder.appendDecimalRational(number.mant, number.exp)
+              else
+                encoder.appendBinaryRational(number.mant, number.exp);
+            } catch (error) {
+              throw new textobj.InputError(error.message, inputRangeWithObject.index);
+            }
+          }
+
+          setEncodingState(true, encoder.bytes);
+
+        } catch (error) {
+          let errorMsg = error.message;
+
+          if (error instanceof textobj.InputError) {
+            let [lineIndex, columnIndex] = textobj.makeIndexRelativeToLine(error.index, input);
+            errorMsg = `\u{26A0} line ${lineIndex + 1}:${columnIndex + 1}: ${errorMsg}`;
+            // set cursor immediately before first invalid character
+            inputElement.focus();
+            inputElement.setSelectionRange(error.index, error.index);  // index: UTF-16 code units (not codepoints)
+          }
+
+          setEncodingState(true, [], errorMsg);
+        }
+
+      }
+
+      document.getElementById('textarea-input').oninput = markInputAsChanged;
+      document.getElementById('button-encode').onclick = encodeInput;
+
+      BigInt(0);  // introduced with ECMAScript 2020
+      markInputAsChanged();  // replace static content that basically says: "not working"
+    </script>
   </body>
-
-  <script type="text/javascript">
-    "use strict";
-
-    // TODO convert with Ctrl + Enter
-    // TODO assign line:column to encoder error
-    // TODO jump to input on click on line:column of error
-    // TODO improve error encoder messages
-    // TODO group bytes by encoded object and link objects with corresponding bytes
-
-    function setEncodingState (isComplete = false, outputBytes = null, errorMessage = null) {
-      const representationElement = document.getElementById('div-representation');
-      const outputElement = document.getElementById('textarea-dborbytes');
-      const stateElement = document.getElementById('span-encoding-error');
-      const encodeButtonElement = document.getElementById('button-encode');
-
-      const stringifiedBytes = outputBytes ? outputBytes.map(b => '0x' + b.toString(16).padStart(2, '0').toUpperCase()).join(', ') : [];
-      outputElement.value = stringifiedBytes;
-
-      if (errorMessage) {
-        representationElement.classList.add('invalid');
-      } else {
-        representationElement.classList.remove('invalid');
-        if (outputBytes)
-          representationElement.classList.add('valid');
-        else
-          representationElement.classList.remove('valid');
-      }
-
-      stateElement.textContent = errorMessage || '';
-      encodeButtonElement.disabled = isComplete;
-    }
-
-
-    function markInputAsChanged () {
-      setEncodingState();
-    }
-
-
-    function encodeInput () {
-      const inputElement = document.getElementById('textarea-input');
-
-      const input = inputElement.value || '';
-      let parser = new textobj.Parser(input);
-      let encoder = new dbor.Encoder();
-
-      try {
-        while (true) {
-          parser.consumeOptionalWhitespace();
-
-          const number = parser.consumeNumber();
-          if (number.mant === 0n && number.isNeg)
-            encoder.appendMinusZero()
-          else if (!number.base)
-            encoder.appendInteger(number.mant)
-          else if (number.base === 10n)
-            encoder.appendDecimalRational(number.mant, number.exp)
-          else
-            encoder.appendBinaryRational(number.mant, number.exp);
-
-          parser.consumeOptionalWhitespace();
-          if (!parser.unparsed)
-            break;
-
-          if (parser.unparsed[0] != ',')
-            throw new textobj.InputError("missing ','", parser.index);
-
-          parser.advance();
-        }
-
-        setEncodingState(true, encoder.bytes);
-
-      } catch (error) {
-        let errorMsg = error.message;
-        if (error instanceof textobj.InputError) {
-          let [lineIndex, columnIndex] = textobj.makeIndexRelativeToLine(error.index, input);
-          errorMsg = `\u{26A0} line ${lineIndex + 1}:${columnIndex + 1}: ${errorMsg}`;
-          // set cursor immediately before first invalid character
-          inputElement.focus();
-          inputElement.setSelectionRange(error.index, error.index);  // index: UTF-16 code units (not codepoints)
-        }
-
-        setEncodingState(true, [], errorMsg);
-      }
-
-    }
-
-    document.getElementById('textarea-input').oninput = markInputAsChanged;
-    document.getElementById('button-encode').onclick = encodeInput;
-
-    BigInt(0);  // introduced with ECMAScript 2020
-    markInputAsChanged();  // replace static content that basically says: "not working"
-  </script>
 
 </html>
