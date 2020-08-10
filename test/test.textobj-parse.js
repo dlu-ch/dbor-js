@@ -13,7 +13,7 @@ describe('parser helpers', function () {
 
   describe('IntegerWithExpFactor', function () {
     it('positive integer', function () {
-      let n = new IntegerWithExpFactor(123);
+      let n = new textobj.IntegerWithExpFactor(123);
       assert.isTrue(n.mant == 123n);
       assert.isTrue(n.exp == 0n);
       assert.isNull(n.base);
@@ -21,7 +21,7 @@ describe('parser helpers', function () {
     });
 
     it('negative integer', function () {
-      let n = new IntegerWithExpFactor(-123);
+      let n = new textobj.IntegerWithExpFactor(-123);
       assert.isTrue(n.mant == -123n);
       assert.isTrue(n.exp == 0n);
       assert.isNull(n.base);
@@ -29,7 +29,7 @@ describe('parser helpers', function () {
     });
 
     it('zero', function () {
-      let n = new IntegerWithExpFactor();
+      let n = new textobj.IntegerWithExpFactor();
       assert.isTrue(n.mant == 0n);
       assert.isTrue(n.exp == 0n);
       assert.isNull(n.base);
@@ -37,7 +37,7 @@ describe('parser helpers', function () {
     });
 
     it('negative integer by power of 2', function () {
-      let n = new IntegerWithExpFactor(-123, 2, -45, false);
+      let n = new textobj.IntegerWithExpFactor(-123, 2, -45, false);
       assert.isTrue(n.mant == -123n);
       assert.isTrue(n.exp == -45n);
       assert.isTrue(n.base == 2n);
@@ -48,31 +48,31 @@ describe('parser helpers', function () {
 
   describe('makeIndexRelativeToLine()', function () {
     it('empty', function () {
-      assert.deepEqual(makeIndexRelativeToLine(0, ''), [0, 0]);
-      assert.deepEqual(makeIndexRelativeToLine(123, ''), [0, 123]);
-      assert.deepEqual(makeIndexRelativeToLine(123, ''), [0, 123]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(0, ''), [0, 0]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(123, ''), [0, 123]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(123, ''), [0, 123]);
     });
 
     it('CR LF', function () {
-      assert.deepEqual(makeIndexRelativeToLine(0, 'a\r\n\n\r\r\n\nb'), [0, 0]);
-      assert.deepEqual(makeIndexRelativeToLine(1, 'a\r\n\n\r\r\n\nb'), [0, 1]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(0, 'a\r\n\n\r\r\n\nb'), [0, 0]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(1, 'a\r\n\n\r\r\n\nb'), [0, 1]);
 
-      assert.deepEqual(makeIndexRelativeToLine(2, 'a\r\n\n\r\r\n\nb'), [1, 0]);
-      assert.deepEqual(makeIndexRelativeToLine(3, 'a\r\n\n\r\r\n\nb'), [1, 0]);
-                                               //   ^^^^ CR LF
+      assert.deepEqual(textobj.makeIndexRelativeToLine(2, 'a\r\n\n\r\r\n\nb'), [1, 0]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(3, 'a\r\n\n\r\r\n\nb'), [1, 0]);
+                                                       //   ^^^^ CR LF
 
-      assert.deepEqual(makeIndexRelativeToLine(4, 'a\r\n\n\r\r\n\nb'), [2, 0]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(4, 'a\r\n\n\r\r\n\nb'), [2, 0]);
 
-      assert.deepEqual(makeIndexRelativeToLine(5, 'a\r\n\n\r\r\n\nb'), [3, 0]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(5, 'a\r\n\n\r\r\n\nb'), [3, 0]);
 
-      assert.deepEqual(makeIndexRelativeToLine(6, 'a\r\n\n\r\r\n\nb'), [4, 0]);
-      assert.deepEqual(makeIndexRelativeToLine(7, 'a\r\n\n\r\r\n\nb'), [4, 0]);
-                                               //           ^^^^ CR LF
+      assert.deepEqual(textobj.makeIndexRelativeToLine(6, 'a\r\n\n\r\r\n\nb'), [4, 0]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(7, 'a\r\n\n\r\r\n\nb'), [4, 0]);
+                                                       //           ^^^^ CR LF
 
-      assert.deepEqual(makeIndexRelativeToLine(8, 'a\r\n\n\r\r\n\nb'), [5, 0]);
-      assert.deepEqual(makeIndexRelativeToLine(9, 'a\r\n\n\r\r\n\nb'), [5, 1]);
-      assert.deepEqual(makeIndexRelativeToLine(10, 'a\r\n\n\r\r\n\nb'), [5, 10 - 8]);
-      assert.deepEqual(makeIndexRelativeToLine(100, 'a\r\n\n\r\r\n\nb'), [5, 100 - 8]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(8, 'a\r\n\n\r\r\n\nb'), [5, 0]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(9, 'a\r\n\n\r\r\n\nb'), [5, 1]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(10, 'a\r\n\n\r\r\n\nb'), [5, 10 - 8]);
+      assert.deepEqual(textobj.makeIndexRelativeToLine(100, 'a\r\n\n\r\r\n\nb'), [5, 100 - 8]);
     });
   });
 
@@ -82,7 +82,7 @@ describe('parser helpers', function () {
 
       it('decimal integer', function () {
         const [isNeg, value, base, decimalPlaces, dotPos, parsedLength] =
-            parseSimpleNumber('-1_23_');
+            textobj.parseSimpleNumber('-1_23_');
         assert.isTrue(isNeg);
         assert.isTrue(value == -123n);
         assert.isTrue(base == 10n);
@@ -93,7 +93,7 @@ describe('parser helpers', function () {
 
       it('decimal non-integer', function () {
         const [isNeg, value, base, decimalPlaces, dotPos, parsedLength] =
-            parseSimpleNumber('1_2.34_5_');
+            textobj.parseSimpleNumber('1_2.34_5_');
         assert.isFalse(isNeg);
         assert.isTrue(value == 12345n);
         assert.isTrue(base == 10n);
@@ -104,7 +104,7 @@ describe('parser helpers', function () {
 
       it('binary non-integer', function () {
         const [isNeg, value, base, decimalPlaces, dotPos, parsedLength] =
-            parseSimpleNumber('-2#10.001_011');
+            textobj.parseSimpleNumber('-2#10.001_011');
         assert.isTrue(isNeg);
         assert.isTrue(value == -0b10001011n);
         assert.isTrue(base == 2n);
@@ -115,7 +115,7 @@ describe('parser helpers', function () {
 
       it('base 36 non-integer', function () {
         const [isNeg, value, base, decimalPlaces, dotPos, parsedLength] =
-            parseSimpleNumber('36#Z.Z');
+            textobj.parseSimpleNumber('36#Z.Z');
         assert.isFalse(isNeg);
         assert.isTrue(value == 35n * 36n + 35n);
         assert.isTrue(base == 36n);
@@ -130,9 +130,9 @@ describe('parser helpers', function () {
 
       it('empty', function () {
         try {
-          parseSimpleNumber('');
+          textobj.parseSimpleNumber('');
         } catch (error) {
-          assert.instanceOf(error, InputTypeError);
+          assert.instanceOf(error, textobj.InputTypeError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -140,9 +140,9 @@ describe('parser helpers', function () {
 
       it('only sign', function () {
         try {
-          parseSimpleNumber('-');
+          textobj.parseSimpleNumber('-');
         } catch (error) {
-          assert.instanceOf(error, InputTypeError);
+          assert.instanceOf(error, textobj.InputTypeError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -150,9 +150,9 @@ describe('parser helpers', function () {
 
       it('starts with non-decimal digit', function () {
         try {
-          parseSimpleNumber('A');
+          textobj.parseSimpleNumber('A');
         } catch (error) {
-          assert.instanceOf(error, InputTypeError);
+          assert.instanceOf(error, textobj.InputTypeError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -160,9 +160,9 @@ describe('parser helpers', function () {
 
       it('starts with _', function () {
         try {
-          parseSimpleNumber('_');
+          textobj.parseSimpleNumber('_');
         } catch (error) {
-          assert.instanceOf(error, InputTypeError);
+          assert.instanceOf(error, textobj.InputTypeError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -170,9 +170,9 @@ describe('parser helpers', function () {
 
       it('starts with .', function () {
         try {
-          parseSimpleNumber('.');
+          textobj.parseSimpleNumber('.');
         } catch (error) {
-          assert.instanceOf(error, InputTypeError);
+          assert.instanceOf(error, textobj.InputTypeError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -180,9 +180,9 @@ describe('parser helpers', function () {
 
       it('non-decimal digit', function () {
         try {
-          parseSimpleNumber('123A3');
+          textobj.parseSimpleNumber('123A3');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'invalid digit for base 10 number');
           assert.equal(error.index, 3);
         }
@@ -190,9 +190,9 @@ describe('parser helpers', function () {
 
       it('consecutive _', function () {
         try {
-          parseSimpleNumber('1_2__3');
+          textobj.parseSimpleNumber('1_2__3');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "surplus '_' in number");
           assert.equal(error.index, 4);
         }
@@ -200,9 +200,9 @@ describe('parser helpers', function () {
 
       it('_ after .', function () {
         try {
-          parseSimpleNumber('1_2._3');
+          textobj.parseSimpleNumber('1_2._3');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "missing digit after '.'");
           assert.equal(error.index, 4);
         }
@@ -210,9 +210,9 @@ describe('parser helpers', function () {
 
       it('multiple .', function () {
         try {
-          parseSimpleNumber('1_2.4.5');
+          textobj.parseSimpleNumber('1_2.4.5');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "surplus '.' in number")
           assert.equal(error.index, 5);
         }
@@ -220,9 +220,9 @@ describe('parser helpers', function () {
 
       it('. in base', function () {
         try {
-          parseSimpleNumber('-1.2#');
+          textobj.parseSimpleNumber('-1.2#');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "invalid in number base: '.'")
           assert.equal(error.index, 2);
         }
@@ -230,9 +230,9 @@ describe('parser helpers', function () {
 
       it('_ in base', function () {
         try {
-          parseSimpleNumber('-1_2#');
+          textobj.parseSimpleNumber('-1_2#');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "invalid in number base: '_'")
           assert.equal(error.index, 2);
         }
@@ -240,9 +240,9 @@ describe('parser helpers', function () {
 
       it('base too small', function () {
         try {
-          parseSimpleNumber('1#0');
+          textobj.parseSimpleNumber('1#0');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "number base must be 2 .. 36, not 1");
           assert.equal(error.index, 0);
         }
@@ -250,9 +250,9 @@ describe('parser helpers', function () {
 
       it('base too great', function () {
         try {
-          parseSimpleNumber('-37#0');
+          textobj.parseSimpleNumber('-37#0');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "number base must be 2 .. 36, not 37");
           assert.equal(error.index, 1);
         }
@@ -260,9 +260,9 @@ describe('parser helpers', function () {
 
       it('base much too great', function () {
         try {
-          parseSimpleNumber('999999999999999999999999999999999999#0');
+          textobj.parseSimpleNumber('999999999999999999999999999999999999#0');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message,
                        "number base must be 2 .. 36, not 999999999999999999999999999999999999");
           assert.equal(error.index, 0);
@@ -271,9 +271,9 @@ describe('parser helpers', function () {
 
       it('invalid digit', function () {
         try {
-          parseSimpleNumber('16#ABCDEFGH');
+          textobj.parseSimpleNumber('16#ABCDEFGH');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'invalid digit for base 16 number');
           assert.equal(error.index, 9);
         }
@@ -281,9 +281,9 @@ describe('parser helpers', function () {
 
       it('ends with .', function () {
         try {
-          parseSimpleNumber('1_2.');
+          textobj.parseSimpleNumber('1_2.');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "missing digit after '.'");
           assert.equal(error.index, 4);
         }
@@ -291,9 +291,9 @@ describe('parser helpers', function () {
 
       it('ends with #', function () {
         try {
-          parseSimpleNumber('12#');
+          textobj.parseSimpleNumber('12#');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "missing digit after '#'");
           assert.equal(error.index, 3);
         }
@@ -301,9 +301,9 @@ describe('parser helpers', function () {
 
       it('multiple #', function () {
         try {
-          parseSimpleNumber('8#777#');
+          textobj.parseSimpleNumber('8#777#');
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, "surplus '#' in number");
           assert.equal(error.index, 5);
         }
@@ -319,19 +319,19 @@ describe('parser helpers', function () {
 describe('Parser', function () {
   describe('construction', function () {
     it('line separators', function () {
-      let p = new Parser('a\r\nb\rc\n\r\n');
+      let p = new textobj.Parser('a\r\nb\rc\n\r\n');
       assert.equal(p.unparsed, 'a\r\nb\rc\n\r\n')
     });
 
     it('indices are 0', function () {
-      let p = new Parser('');
+      let p = new textobj.Parser('');
       assert.equal(p.index, 0);
     });
   });
 
   describe('consumeOptionalWhitespace()', function () {
     it('empty', function () {
-      let p = new Parser('');
+      let p = new textobj.Parser('');
       assert.equal(p.unparsed, '')
       assert.equal(p.index, 0);
 
@@ -341,7 +341,7 @@ describe('Parser', function () {
     });
 
     it('non-empty', function () {
-      let p = new Parser('\n\t  \n \b x');
+      let p = new textobj.Parser('\n\t  \n \b x');
       p.consumeOptionalWhitespace();
       assert.equal(p.unparsed, 'x')
       assert.equal(p.index, 8);
@@ -354,7 +354,7 @@ describe('Parser', function () {
     describe('valid', function () {
 
       it('negative decimal integer', function () {
-        let p = new Parser('-10232');
+        let p = new textobj.Parser('-10232');
         const n = p.consumeNumber();
 
         assert.isTrue(n.isNeg);
@@ -367,7 +367,7 @@ describe('Parser', function () {
       });
 
       it('negative hexdecimal integer', function () {
-        let p = new Parser('-16#DEAD_BEEF');
+        let p = new textobj.Parser('-16#DEAD_BEEF');
         const n = p.consumeNumber();
 
         assert.isTrue(n.isNeg);
@@ -380,7 +380,7 @@ describe('Parser', function () {
       });
 
       it('positive power of ten', function () {
-        let p = new Parser('10^-10232');
+        let p = new textobj.Parser('10^-10232');
         const n = p.consumeNumber();
 
         assert.isFalse(n.isNeg);
@@ -393,7 +393,7 @@ describe('Parser', function () {
       });
 
       it('negative power of ten', function () {
-        let p = new Parser('-10^10232');
+        let p = new textobj.Parser('-10^10232');
         const n = p.consumeNumber();
 
         assert.isTrue(n.isNeg);
@@ -406,7 +406,7 @@ describe('Parser', function () {
       });
 
       it('non-integer decimal mantissa (gets normalized)', function () {
-        let p = new Parser('12.340_000_*_10^5');
+        let p = new textobj.Parser('12.340_000_*_10^5');
         const n = p.consumeNumber();
 
         assert.isFalse(n.isNeg);
@@ -419,7 +419,7 @@ describe('Parser', function () {
       });
 
       it('non-integer decimal mantissa (*)', function () {
-        let p = new Parser('123400_*_10^1');
+        let p = new textobj.Parser('123400_*_10^1');
         const n = p.consumeNumber();
 
         assert.isFalse(n.isNeg);
@@ -432,7 +432,7 @@ describe('Parser', function () {
       });
 
       it('non-integer decimal mantissa (/)', function () {
-        let p = new Parser('123400_/_10^-5');
+        let p = new textobj.Parser('123400_/_10^-5');
         const n = p.consumeNumber();
 
         assert.isFalse(n.isNeg);
@@ -445,7 +445,7 @@ describe('Parser', function () {
       });
 
       it('integer base 3 mantissa', function () {
-        let p = new Parser('3#12.00_*_10^1');
+        let p = new textobj.Parser('3#12.00_*_10^1');
         const n = p.consumeNumber();
 
         assert.isFalse(n.isNeg);
@@ -458,7 +458,7 @@ describe('Parser', function () {
       });
 
       it('non-integer base 5 mantissa', function () {
-        let p = new Parser('5#12.34_*_10^1');
+        let p = new textobj.Parser('5#12.34_*_10^1');
         const n = p.consumeNumber();
         // 194 / 5^2 * 10^1 = 194 * 2^2 / 10^2 * 10^1 = 776 * 10^-1
 
@@ -472,7 +472,7 @@ describe('Parser', function () {
       });
 
       it('non-integer base 8 mantissa', function () {
-        let p = new Parser('8#12.34_*_10^1');
+        let p = new textobj.Parser('8#12.34_*_10^1');
         const n = p.consumeNumber();
         // 668 / 8^2 * 10^1 = 668 * 5^6 / 10^6 * 10^1 = 10437500 * 10^-5 = 104375 * 10^-3
 
@@ -486,7 +486,7 @@ describe('Parser', function () {
       });
 
       it('non-integer base 20 mantissa', function () {
-        let p = new Parser('20#12.34_*_10^1');
+        let p = new textobj.Parser('20#12.34_*_10^1');
         const n = p.consumeNumber();
         // 8864 / 20^2 * 10^1 = 8864 * 5^2 / 10^4 * 10^1 = 8864 * 5^2 * 10^-3 = 2216 * 10^-1
 
@@ -500,7 +500,7 @@ describe('Parser', function () {
       });
 
       it('non-integer base 10 mantissa', function () {
-        let p = new Parser('6.125*2^7');
+        let p = new textobj.Parser('6.125*2^7');
         const n = p.consumeNumber();
         // 6125 / 10^3 * 2^7 = 6125 / 5^3 * 2^4 = 49 * 2^4
 
@@ -514,7 +514,7 @@ describe('Parser', function () {
       });
 
       it('zero mantissa with non-zero exponent', function () {
-        let p = new Parser('-0.000*2^7');
+        let p = new textobj.Parser('-0.000*2^7');
         const n = p.consumeNumber();
 
         assert.isTrue(n.isNeg);
@@ -531,23 +531,23 @@ describe('Parser', function () {
     describe('invalid', function () {
 
       it('empty', function () {
-        let p = new Parser('\n ');
+        let p = new textobj.Parser('\n ');
         p.consumeOptionalWhitespace();
         try {
             p.consumeNumber()
         } catch (error) {
-            assert.instanceOf(error, InputTypeError);
+            assert.instanceOf(error, textobj.InputTypeError);
         }
         assert.equal(p.index, 2);
       });
 
       it('non-integer base 3 mantissa', function () {
-        let p = new Parser('\n -3#12.01_*_10^1');
+        let p = new textobj.Parser('\n -3#12.01_*_10^1');
         p.consumeOptionalWhitespace();
         try {
           p.consumeNumber();
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message,
                       "non-integer mantissa in base 3 cannot be represented exactly in base 10");
           assert.equal(error.index, 2 + 5);
@@ -556,12 +556,12 @@ describe('Parser', function () {
       });
 
       it('syntax error in mantissa', function () {
-        let p = new Parser('\n +2#12.3*10^3');
+        let p = new textobj.Parser('\n +2#12.3*10^3');
         p.consumeOptionalWhitespace();
         try {
           p.consumeNumber();
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'invalid digit for base 2 number');
           assert.equal(error.index, 2 + 4);
         }
@@ -569,12 +569,12 @@ describe('Parser', function () {
       });
 
       it('syntax error in exponent', function () {
-        let p = new Parser('\n -1.23_*_10^+2#123');
+        let p = new textobj.Parser('\n -1.23_*_10^+2#123');
         p.consumeOptionalWhitespace();
         try {
           p.consumeNumber();
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'invalid digit for base 2 number');
           assert.equal(error.index, 2 + 15);
         }
@@ -582,12 +582,12 @@ describe('Parser', function () {
       });
 
       it('syntax error in exponent (without mantissa)', function () {
-        let p = new Parser('\n +10^2#123');
+        let p = new textobj.Parser('\n +10^2#123');
         p.consumeOptionalWhitespace();
         try {
           p.consumeNumber();
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'invalid digit for base 2 number');
           assert.equal(error.index, 2 + 7);
         }
@@ -595,12 +595,12 @@ describe('Parser', function () {
       });
 
       it('syntax error between mantissa and exponent', function () {
-        let p = new Parser('\n 1.23_*/10^2#123');
+        let p = new textobj.Parser('\n 1.23_*/10^2#123');
         p.consumeOptionalWhitespace();
         try {
           p.consumeNumber();
         } catch (error) {
-          assert.instanceOf(error, InputError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'missing digit or exponentiation factor');
           assert.equal(error.index, 2 + 4);
         }
@@ -611,21 +611,21 @@ describe('Parser', function () {
 
     describe('base or no base?', function () {
       it('zero', function () {
-        assert.isNull(new Parser('0').consumeNumber().base);
-        assert.isTrue(new Parser('0.0').consumeNumber().base == 10n);
-        assert.isTrue(new Parser('0*10^0').consumeNumber().base == 10n);
+        assert.isNull(new textobj.Parser('0').consumeNumber().base);
+        assert.isTrue(new textobj.Parser('0.0').consumeNumber().base == 10n);
+        assert.isTrue(new textobj.Parser('0*10^0').consumeNumber().base == 10n);
       });
 
       it('non-zero', function () {
-        assert.isNull(new Parser('123').consumeNumber().base);
-        assert.isTrue(new Parser('16#12.3').consumeNumber().base == 10n);
-        assert.isTrue(new Parser('12*10^3').consumeNumber().base == 10n);
+        assert.isNull(new textobj.Parser('123').consumeNumber().base);
+        assert.isTrue(new textobj.Parser('16#12.3').consumeNumber().base == 10n);
+        assert.isTrue(new textobj.Parser('12*10^3').consumeNumber().base == 10n);
       });
     });
 
     describe('partial', function () {
       it('stops before ,', function () {
-        const p = new Parser('123,');
+        const p = new textobj.Parser('123,');
         const n = p.consumeNumber();
         assert.equal(p.index, 3);
       });

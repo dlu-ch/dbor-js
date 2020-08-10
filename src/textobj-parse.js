@@ -4,29 +4,34 @@
 
 // https://www.ecma-international.org/ecma-262/11.0/
 
-class InputError extends Error {
+"use strict";
+
+let textobj = {};  // name space
+
+
+textobj.InputError = class extends Error {
   constructor(message, index = 0) {
     super(message);
     this.index = index;  // 0-based index of first invalid UTF-16 code unit in input
   }
-}
+};
 
 
-class InputTypeError extends InputError {
-}
+textobj.InputTypeError = class extends textobj.InputError {
+};
 
 
-class IntegerWithExpFactor {
+textobj.IntegerWithExpFactor = class {
   constructor(mant, base, exp, isNeg) {
     this.mant = BigInt(mant || 0);
     this.exp = BigInt(exp || 0);
     this.base = base == null ? null : BigInt(base);
     this.isNeg = (isNeg || this.mant < 0n) && this.mant <= 0n;
   }
-}
+};
 
 
-function makeIndexRelativeToLine (index, text = '') {  // -> [lineIndex, columnIndex]
+textobj.makeIndexRelativeToLine = function (index, text = '') {  // -> [lineIndex, columnIndex]
   text = String(text);
   index = Number(index);
 
@@ -47,7 +52,7 @@ function makeIndexRelativeToLine (index, text = '') {  // -> [lineIndex, columnI
   }
 
   return [lineIndex, columnIndex + index - j];
-}
+};
 
 
 // Parse the longest non-empty prefix of text that matches <number> as a number.
@@ -75,11 +80,11 @@ function makeIndexRelativeToLine (index, text = '') {  // -> [lineIndex, columnI
 //   <decimal-digit> ::= "0" | ... | "9".
 //   <digit> ::= <decimal-digit> | "A" | ... | "Z".
 
-function parseSimpleNumber (text) {  // -> [isNeg: bool, value: BigInt, base: BigInt, decimalPlaces: BigInt, dotPos: Number, parsedlength: Number]
+textobj.parseSimpleNumber = function (text) {  // -> [isNeg: bool, value: BigInt, base: BigInt, decimalPlaces: BigInt, dotPos: Number, parsedlength: Number]
   text = String(text);
   let m = text.match(/^([+-])?[0-9]/);
   if (!m)
-    throw new InputTypeError('missing number', 0);
+    throw new textobj.InputTypeError('missing number', 0);
 
   const isNeg = m[1] == '-';
   const afterSignPos = (m[1] || '').length;
@@ -108,19 +113,19 @@ function parseSimpleNumber (text) {  // -> [isNeg: bool, value: BigInt, base: Bi
         const c = text[pos].codePointAt(0);
         const d = BigInt(c >= 0x41 ? c - 0x41 + 10 : c - 0x30);
         if (d >= base)
-          throw new InputError(`invalid digit for base ${base} number`, pos);
+          throw new textobj.InputError(`invalid digit for base ${base} number`, pos);
         absValue = base * absValue + d;
         if (lastDotPos !== null)
           decimalPlaces += 1n;
       } else if (text[pos] == '_') {
         if (lastUnderscorePos !== null && lastUnderscorePos + 1 == pos)
-          throw new InputError("surplus '_' in number", pos);
+          throw new textobj.InputError("surplus '_' in number", pos);
         if (lastDotPos !== null && lastDotPos + 1 == pos)
-          throw new InputError("missing digit after '.'", pos);
+          throw new textobj.InputError("missing digit after '.'", pos);
         lastUnderscorePos = pos;
       } else if (text[pos] == '.') {
         if (lastDotPos !== null)
-          throw new InputError("surplus '.' in number", pos);
+          throw new textobj.InputError("surplus '.' in number", pos);
         lastDotPos = pos;
         decimalPlaces = 0n;
       } else {
@@ -145,37 +150,37 @@ function parseSimpleNumber (text) {  // -> [isNeg: bool, value: BigInt, base: Bi
       break;
 
     if (hasExplicitBase)
-      throw new InputError("surplus '#' in number", pos);
+      throw new textobj.InputError("surplus '#' in number", pos);
     if (lastUnderscorePos !== null)
-      throw new InputError("invalid in number base: '_'", lastUnderscorePos);
+      throw new textobj.InputError("invalid in number base: '_'", lastUnderscorePos);
     if (lastDotPos !== null)
-      throw new InputError("invalid in number base: '.'", lastDotPos);
+      throw new textobj.InputError("invalid in number base: '.'", lastDotPos);
     if (absValue < 2 || absValue > 36)
-      throw new InputError(`number base must be 2 .. 36, not ${absValue}`, afterSignPos);
+      throw new textobj.InputError(`number base must be 2 .. 36, not ${absValue}`, afterSignPos);
 
     hasExplicitBase = true;
     base = absValue;
     pos += 1;
     if (pos >= text.length || !text[pos].match(/^[0-9A-Z]/))
-      throw new InputError("missing digit after '#'", pos);
+      throw new textobj.InputError("missing digit after '#'", pos);
   }
 
   if (lastUnderscorePos !== null && lastUnderscorePos + 1 == pos)
     pos -= 1;
 
   return [isNeg, isNeg ? -absValue : absValue, base, decimalPlaces, lastDotPos, pos]
-}
+};
 
 
-function parseSimpleInteger (text) {  // -> [isNeg: bool, absValue: BigInt, parsedlength: Number]
-  const [isNeg, value, base, decimalPlaces, dotPos, parsedLength] = parseSimpleNumber(text);
+textobj.parseSimpleInteger = function (text) {  // -> [isNeg: bool, absValue: BigInt, parsedlength: Number]
+  const [isNeg, value, base, decimalPlaces, dotPos, parsedLength] = textobj.parseSimpleNumber(text);
   if (dotPos != null)
-      throw new InputError("invalid in integer number: '.'", dotPos);
+      throw new textobj.InputError("invalid in integer number: '.'", dotPos);
   return [value, parsedLength];
-}
+};
 
 
-class Parser {
+textobj.Parser = class {
 
   constructor (text) {
     this.unparsed = String(text);
@@ -237,7 +242,7 @@ class Parser {
   //   <decimal-digit> ::= "0" | ... | "9".
   //   <digit> ::= <decimal-digit> | "A" | ... | "Z".
 
-  consumeNumber () {  // -> IntegerWithExpFactor(mant, powerBase, exp, isNeg) where powerBase is 2 or 10 or null
+  consumeNumber () {  // -> textobj.IntegerWithExpFactor(mant, powerBase, exp, isNeg) where powerBase is 2 or 10 or null
     let pos = 0;  // relative to this.index
 
     // parse
@@ -269,7 +274,7 @@ class Parser {
         // parse mantissa
         let mantLength;
         [isNeg, mant, mantBase, mantDecimalPlaces, mantDotPos, mantLength] =
-          parseSimpleNumber(this.unparsed);
+          textobj.parseSimpleNumber(this.unparsed);
         if (mantDecimalPlaces != null)
           powerBase = 10n;
 
@@ -283,14 +288,14 @@ class Parser {
           expStr = potentialExpStr.substring(m[0].length);
           pos += m[0].length;
         } else if (potentialExpStr.match(/^[0-9A-Z_^*/+-]/)) {
-            throw new InputError('missing digit or exponentiation factor', 0);
+            throw new textobj.InputError('missing digit or exponentiation factor', 0);
         }
       }
 
       // parse exponent
       if (expStr) {
         let expLength;
-        [exp, expLength] = parseSimpleInteger(expStr);
+        [exp, expLength] = textobj.parseSimpleInteger(expStr);
         if (invertExp)
           exp = -exp;
         pos += expLength;
@@ -298,7 +303,7 @@ class Parser {
       }
 
     } catch (error) {
-      if (!(error instanceof InputError))
+      if (!(error instanceof textobj.InputError))
         throw error;
       throw new error.constructor(
         error.message, this.index + pos + error.index);
@@ -337,7 +342,7 @@ class Parser {
       // mantBase and powerBase have no common prime factors
       while (mantBase > 1n && mantDecimalPlaces > 0n) {
         if (mant % mantBase != 0n)
-          throw new InputError(
+          throw new textobj.InputError(
             `non-integer mantissa in base ${origMantBase} cannot be ` +
             `represented exactly in base ${powerBase}`,
             this.index + (mantDotPos || 0));
@@ -357,7 +362,7 @@ class Parser {
     }
 
     this.advance(pos);
-    return new IntegerWithExpFactor(mant, powerBase, exp, isNeg);
+    return new textobj.IntegerWithExpFactor(mant, powerBase, exp, isNeg);
   }
 
-}
+};

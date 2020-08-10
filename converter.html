@@ -13,7 +13,7 @@ Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
 
     <!-- avoid import (not usable with local files due to CORS restrictions e.g. in Firefox 68) -->
     <script type="text/javascript" src="./src/encode.js"></script>
-    <script type="text/javascript" src="./src/parse.js"></script>
+    <script type="text/javascript" src="./src/textobj-parse.js"></script>
 
     <style>
       body {
@@ -119,7 +119,7 @@ Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
       const inputElement = document.getElementById('textarea-input');
 
       const input = inputElement.value || '';
-      let parser = new Parser(input);
+      let parser = new textobj.Parser(input);
       let encoder = new DborEncoder();
 
       try {
@@ -141,7 +141,7 @@ Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
             break;
 
           if (parser.unparsed[0] != ',')
-            throw new InputError("missing ','", parser.index);
+            throw new textobj.InputError("missing ','", parser.index);
 
           parser.advance();
         }
@@ -150,8 +150,8 @@ Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
 
       } catch (error) {
         let errorMsg = error.message;
-        if (error instanceof InputError) {
-          let [lineIndex, columnIndex] = makeIndexRelativeToLine(error.index, input);
+        if (error instanceof textobj.InputError) {
+          let [lineIndex, columnIndex] = textobj.makeIndexRelativeToLine(error.index, input);
           errorMsg = `\u{26A0} line ${lineIndex + 1}:${columnIndex + 1}: ${errorMsg}`;
           // set cursor immediately before first invalid character
           inputElement.focus();

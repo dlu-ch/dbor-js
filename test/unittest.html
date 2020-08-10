@@ -1,3 +1,8 @@
+ <!--
+SPDX-License-Identifier: LGPL-3.0-or-later
+dbor-js - ECMAScript 2020 implementation of DBOR encoder
+Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
+-->
 
 <!DOCTYPE html>
 <html lang="en">
@@ -26,9 +31,9 @@
   </script>
 
   <script src="../src/encode.js"></script>
-  <script src="../src/parse.js"></script>
+  <script src="../src/textobj-parse.js"></script>
   <script src="./test.encode.js"></script>
-  <script src="./test.parse.js"></script>
+  <script src="./test.textobj-parse.js"></script>
 
   <script>
     mocha.run(_ => document.getElementById("unittest-result").innerHTML = "");
