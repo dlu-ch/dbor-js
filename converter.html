@@ -17,10 +17,6 @@ Requires browser supports of:
 
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 
-    <!-- avoid import (not usable with local files due to CORS restrictions e.g. in Firefox 68) -->
-    <script type="text/javascript" src="./src/dbor-encode.js"></script>
-    <script type="text/javascript" src="./src/textobj-parse.js"></script>
-
     <style type="text/css">
       body {
         font-family: Helvetica, Arial, sans-serif;
@@ -56,6 +52,12 @@ Requires browser supports of:
       div#div-representation #span-encoding-error {
         color: red;
       }
+      div#div-representation .ifvalid {
+        display: none;
+      }
+      div#div-representation.valid .ifvalid {
+        display: inline;
+      }
 
       span.sequence span.firstinsequence {
         font-weight: bold;
@@ -65,36 +67,35 @@ Requires browser supports of:
         color: black;
       }
 
-      a.underlinedonhover {
-        border-bottom: none;
+      .underlinedonhover {
         text-decoration: none;
       }
-      a.underlinedonhover:hover {
-        border-bottom: 1px dotted;
+      a,
+      .underlinedonhover:hover,
+      .underlined {
+        text-decoration: underline dotted;
       }
 
-      a.underlined {
-        border-bottom: 1px dotted;
-        text-decoration: none;
-      }
-
-      a.withinheritedcolor,
-      a.withinheritedcolor:hover {
+      .withinheritedcolor {
         color: inherit;
       }
 
     </style>
+
+    <!-- avoid import (not usable with local files due to CORS restrictions e.g. in Firefox 68) -->
+    <script defer type="text/javascript" src="./src/dbor-encode.js"></script>  <!-- namespace 'dbor' -->
+    <script defer type="text/javascript" src="./src/textobj-parse.js"></script> <!-- namespace 'textobj' -->
   </head>
 
-  <body>
-    <div id="div-representation">
+  <body onload="initalize()">
+    <div id="div-representation" class="invalid">
       <div class="textareacontainer">
-        Objects to encode:
+        Objects to encode<span class="ifvalid"> (<a id="a-input-url">as URL</a>)</span>:
         <!-- note: placeholder is not supported by HTML 4.01 -->
-        <textarea id="textarea-input" rows="1" cols="1" placeholder="e.g '12.5*2^-6, 16#FFFF_BEAF'"
-                  class="input"
-                  style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre">
-        </textarea>
+        <textarea id="textarea-input" rows="1" cols="1"
+                  placeholder="e.g '12.5*2^-6, 16#FFFF_BEAF'"
+                  class="input" spellcheck="false"
+                  style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre"/></textarea>
       </div>
 
       <p></p>
@@ -109,157 +110,211 @@ Requires browser supports of:
       <div class="textareacontainer">
         Corresponding DBOR encoded byte sequence:
         <div id="div-dborbytes" class="noninput"
-             style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex">
-        </div>
+             style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex"></div>
       </div>
+
+      <p></p>
+      <par>
+        Examples:
+        <ul>
+          <li><a href="?q=-16%23FFFF_FFFF">hexadecimal integer</a></li>
+          <li><a href="?q=1.25*10^9">decimal rational</a></li>
+          <li><a href="?q=0.25*2^-1">binary rational with decimal mantissa</a></li>
+          <li><a href="?q=2%5E-1022">smallest positive binary rational</a></li>
+          <li><a href="?q=-2%231.1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_%2A_2%5E1024">smallest binary rational</a></li>
+          <li><a href="?q=-0">-0</a></li>
+        </ul>
+      </par>
     </div>
 
     <script type="text/javascript">
       "use strict";
 
-      function setEncodingState (isComplete = false, inputRangesWithEncodedObjects = null, errorMarkup = null) {
-        const representationElement = document.getElementById('div-representation');
-        const outputElement = document.getElementById('div-dborbytes');
-        const stateElement = document.getElementById('span-encoding-error');
-        const encodeButtonElement = document.getElementById('button-encode');
+      // --- relies on style/CSS but not specific DOM elements: ---
+
+      function outputMarkupFromInputRangesWithEncodedObjects (inputRangesWithEncodedObjects, functionForLink = null) {
+        let outputMarkup = '';
 
         if (inputRangesWithEncodedObjects) {
           let outputMarkups = [];
           const byteSeparator = ' ';
+
           for (let r of inputRangesWithEncodedObjects) {
             const [dborClass, bytes] = r.object;
-            let cssClass = dborClass.toLowerCase();
-            cssClass = cssClass.match(/^[a-z]+$/) ? `dbor-${cssClass}` : '';
             const hexBytes = bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase());
+
             if (hexBytes.length > 0) {
-              let s = `<span class="firstinsequence">${hexBytes[0]}</span>`;
+              const firstElement = document.createElement('span');
+              firstElement.classList.add('firstinsequence');
+              firstElement.textContent = hexBytes[0];
+
+              const linkElement = document.createElement('a');
+              linkElement.classList.add('withinheritedcolor');
+              linkElement.classList.add('underlinedonhover');
+              if (functionForLink && functionForLink.match(/^[A-Za-z_][A-Za-z_0-9]*$/))
+                linkElement.href = `javascript:${functionForLink}(${r.index}, ${r.length})`;
+              linkElement.appendChild(firstElement);
+
+              const sequenceElement = document.createElement('span');
+              sequenceElement.classList.add('sequence');
+              sequenceElement.classList.add('underlinedonhover');
+              if (dborClass.match(/^[A-Za-z]+$/))
+                sequenceElement.classList.add(`dbor-${dborClass.toLowerCase()}`);
+              sequenceElement.appendChild(linkElement);
               if (hexBytes.length > 1)
-                s += byteSeparator + hexBytes.slice(1).join(byteSeparator);
-              const outputMarkup =
-                `<span class="sequence ${cssClass}">` +
-                  `<a class="withinheritedcolor underlinedonhover" href="javascript:selectInInput(${r.index}, ${r.length})">` +
-                    `${s}` +
-                  `</a>` +
-                `</span>`;
+                sequenceElement.appendChild(document.createTextNode(byteSeparator + hexBytes.slice(1).join(byteSeparator)))
+
+              const outputMarkup = sequenceElement.outerHTML;
               outputMarkups.push(outputMarkup);
             }
           }
-          outputElement.innerHTML = outputMarkups.join(byteSeparator);
-        } else {
-          outputElement.innerText = '';
+          outputMarkup = outputMarkups.join(byteSeparator);
         }
 
+        return outputMarkup;
+      }
+
+
+      function encodeInputText (input) {
+        let inputRangesWithObjects = new textobj.Parser(input).parse();
+        let inputRangesWithEncodedObjects = [];
+
+        for (let inputRangeWithObject of inputRangesWithObjects) {
+          const object = inputRangeWithObject.object;
+          try {
+            let encoder = new dbor.Encoder();
+
+            if (!(object instanceof textobj.IntegerWithExpFactor))
+              throw new TypeError('unsupported type');
+
+            // TODO improve error encoder messages
+
+            const number = object;
+            let dborClass = 'Number';  // will correspond to CSS class
+            if (number.mant === 0n && number.isNeg) {
+              encoder.appendMinusZero();
+              dborClass = 'Numberlike';
+            } else if (!number.base) {
+              encoder.appendInteger(number.mant);
+            } else if (number.base === 10n) {
+              if (number.exp != 0n)
+                encoder.appendDecimalRational(number.mant, number.exp)
+              else
+                encoder.appendInteger(number.mant)
+            } else {
+              encoder.appendBinaryRational(number.mant, number.exp);
+            }
+
+            inputRangesWithEncodedObjects.push(
+              new textobj.InputRange(
+                inputRangeWithObject.index, inputRangeWithObject.length,
+                [dborClass, encoder.bytes]));
+          } catch (error) {
+            throw new textobj.InputError(error.message, inputRangeWithObject.index);
+          }
+        }
+
+        return inputRangesWithEncodedObjects;
+      }
+
+
+      function inputRangeMarkupFromInputError(error /* textobj.InputError */,
+                                              lineIndex, columnIndex, functionForLink = null)
+      {
+        const linkElement = document.createElement('a');
+        linkElement.classList.add('withinheritedcolor');
+        linkElement.classList.add('underlined');
+        if (functionForLink && functionForLink.match(/^[A-Za-z_][A-Za-z_0-9]*$/))
+          linkElement.href = `javascript:${functionForLink}(${error.index})`;
+        linkElement.textContent = `line ${lineIndex + 1}:${columnIndex + 1}`;
+
+        const linenoElement = document.createElement('span');
+        linenoElement.classList.add('lineno');
+        linenoElement.appendChild(linkElement);
+
+        return linenoElement.outerHTML;
+      }
+
+
+      // --- relies on specific DOM elements but not style/CSS: ---
+
+
+      function setEncodingState (isComplete = false, inputRangesWithEncodedObjects = null,
+                                 input = null, errorMarkup = null)
+      {
+        const representationElement = document.getElementById('div-representation');
+        const outputElement = document.getElementById('div-dborbytes');
+        const stateElement = document.getElementById('span-encoding-error');
+        const encodeButtonElement = document.getElementById('button-encode');
+        const inputUrlElement = document.getElementById('a-input-url');
+        inputUrlElement.href = input ? `?q=${encodeURIComponent(input)}` : '';
+
+        // TODO replace markup by element
+        outputElement.innerHTML = outputMarkupFromInputRangesWithEncodedObjects(inputRangesWithEncodedObjects, 'selectInInput')
         representationElement.classList.toggle('invalid', errorMarkup);
         representationElement.classList.toggle('valid', !errorMarkup && inputRangesWithEncodedObjects);
-
-        stateElement.innerHTML = errorMarkup ? `\u{26A0} ${errorMarkup}` : '';
+        // TODO replace markup by element
+        stateElement.innerHTML = errorMarkup || '';
         encodeButtonElement.disabled = isComplete;
       }
 
 
+      // Select a text range in the input element.
+
       function selectInInput (index, length = 0) {
-        index = Number(index);
-        length = Number(length);
-        if (index >= 0 && length >= 0) {
-          const inputElement = document.getElementById('textarea-input');
-          inputElement.focus();
-          inputElement.setSelectionRange(index, index + length);  // index: UTF-16 code units (not codepoints)
-        }
+        const inputElement = document.getElementById('textarea-input');
+        inputElement.focus();
+        inputElement.setSelectionRange(index, index + length);  // index: UTF-16 code units (not codepoints)
       }
 
 
-      function markInputAsChanged () {
-        setEncodingState();
-      }
-
+      // Encode text in the input element, display it in the output element and update state.
 
       function encodeInput () {
         const inputElement = document.getElementById('textarea-input');
-
         const input = inputElement.value || '';
 
         try {
-          let inputRangesWithObjects = new textobj.Parser(input).parse();
-          let inputRangesWithEncodedObjects = [];
-
-          for (let inputRangeWithObject of inputRangesWithObjects) {
-            const object = inputRangeWithObject.object;
-            try {
-              let encoder = new dbor.Encoder();
-
-              if (!(object instanceof textobj.IntegerWithExpFactor))
-                throw new TypeError('unsupported type');
-
-              // TODO improve error encoder messages
-
-              const number = object;
-              let dborClass = 'Number';
-              if (number.mant === 0n && number.isNeg) {
-                encoder.appendMinusZero();
-                dborClass = 'Numberlike';
-              } else if (!number.base) {
-                encoder.appendInteger(number.mant);
-              } else if (number.base === 10n) {
-                if (number.exp != 0n)
-                  encoder.appendDecimalRational(number.mant, number.exp)
-                else
-                  encoder.appendInteger(number.mant)
-              } else {
-                encoder.appendBinaryRational(number.mant, number.exp);
-              }
-
-              inputRangesWithEncodedObjects.push(
-                new textobj.InputRange(
-                  inputRangeWithObject.index, inputRangeWithObject.length,
-                  [dborClass, encoder.bytes]));
-            } catch (error) {
-              throw new textobj.InputError(error.message, inputRangeWithObject.index);
-            }
-          }
-
-          setEncodingState(true, inputRangesWithEncodedObjects);
-
+          setEncodingState(true, encodeInputText(input), input);
         } catch (error) {
           const node = document.createElement('span');
           node.textContent = error.message;
           let errorMarkup = node.innerHTML;
-
           if (error instanceof textobj.InputError) {
-            let [lineIndex, columnIndex] = textobj.makeIndexRelativeToLine(error.index, input);
-            const linenoMarkup =
-              `<span class="lineno"><a class="withinheritedcolor underlined" href="javascript:selectInInput(${error.index})">` +
-                `line ${lineIndex + 1}:${columnIndex + 1}` +
-              `</a></span>`;
-            errorMarkup = `${linenoMarkup}: ${errorMarkup}`;
+            const [lineIndex, columnIndex] = textobj.makeIndexRelativeToLine(error.index, input);
+            errorMarkup = `${inputRangeMarkupFromInputError(error, lineIndex, columnIndex, 'selectInInput')}: ${errorMarkup}`;
             selectInInput(error.index);  // set cursor immediately before first invalid character
           }
-
-          setEncodingState(true, [], errorMarkup);
+          setEncodingState(true, null, null, `\u{26A0} ${errorMarkup}`);
         }
-
       }
 
-      BigInt(0);  // introduced with ECMAScript 2020
 
-      const inputElement = document.getElementById('textarea-input');
-      inputElement.oninput = markInputAsChanged;
-      inputElement.onkeypress = function (event) {
+      function isCtrlPlusEnterEvent(event /* KeyboardEvent */) {
         let ctrlPlusEnterPressed = false;
         try {
           ctrlPlusEnterPressed = event.ctrlKey &&
             (event.code == 'Enter' || event.code == 'NumpadEnter')
         } catch (e) {};
-        if (ctrlPlusEnterPressed)
-          encodeInput();
-      };
-      document.getElementById('button-encode').onclick = encodeInput;
+        return ctrlPlusEnterPressed;
+      }
 
-      const initialInput = new URL(window.location).searchParams.get('q');
-      if (initialInput !== null) {
-        inputElement.value = initialInput;
-        encodeInput();
-      } else
-        markInputAsChanged();  // replace static content that basically says: "not working"
+
+      function initalize () {
+        BigInt(0);  // introduced with ECMAScript 2020
+
+        const inputElement = document.getElementById('textarea-input');
+        inputElement.oninput = event => { setEncodingState() };  // mark input as changed
+        inputElement.onkeypress = event => { isCtrlPlusEnterEvent(event) && encodeInput() };
+        document.getElementById('button-encode').onclick = encodeInput;
+
+        const initialInput = new URL(window.location).searchParams.get('q');
+        if (initialInput !== null) {
+          inputElement.value = initialInput;
+          encodeInput();
+        } else
+          setEncodingState();  // replace static content that basically says: "not working"
+      }
     </script>
   </body>
 
