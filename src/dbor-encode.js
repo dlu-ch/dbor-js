@@ -152,8 +152,7 @@ dbor.splitFiniteNumberIntoBinaryRationalComponents = function (value) {
 
 // Return [isNeg, mantNorm, exp2Norm] where
 // 0 <= mantNorm < 2^53, -1022 - 52 <= exp2Norm <= 1024 - 52, such that
-// |mantNorm| * 2^exp2Norm = |mant| * 2^exp2 and mant >= 2^52 for exp2 > -1022 - 52
-// and mant < 2^52 for exp2 = -1022 - 52.
+// |mantNorm| * 2^exp2Norm = |mant| * 2^exp2, and mant >= 2^52 for exp2 > -1022 - 52.
 dbor.normalizeBinaryRationalComponents = function (mant, exp2) {
   mant = BigInt(mant);
   exp2 = BigInt(exp2);
@@ -169,7 +168,7 @@ dbor.normalizeBinaryRationalComponents = function (mant, exp2) {
     exp2Norm += 1;
   }
   if (mantNormAbs > (1n << 53n))
-    throw new RangeError("'mant' too wide");
+    throw new RangeError("mantissa too wide");
   while (mantNormAbs < (1n << 52n)) {
       mantNormAbs *= 2n;
       exp2Norm -= 1n;
@@ -182,12 +181,13 @@ dbor.normalizeBinaryRationalComponents = function (mant, exp2) {
     throw new RangeError('magnitude too large');
 
   if (exp2Norm <= -1022n - 52n) {
-    // denormalized
+    // subnormal
     while (exp2Norm < -1022n - 52n && !(mantNormAbs & 1n)) {
       mantNormAbs /= 2n;
       exp2Norm += 1n;
     }
-    if (exp2Norm < -1022n - 52n || mantNormAbs >= 1n << 52n)
+    // exp2Norm <= -1022n - 52n, mantNormAbs < 2^53
+    if (exp2Norm < -1022n - 52n)
       throw new RangeError('magnitude too small');
     return [isNeg, mantNormAbs, -1022 - 52];
   }
@@ -214,7 +214,7 @@ dbor.encodeCanonicalBinaryRationalToken = function (mant, exp2) {
   let k;  // size of BinaryRationalValue - 1
   let binary; // lowest 8 (k + 1) bits will represent the number
 
-  if (mantNorm < (1n << 52n)) {  // denormalized?
+  if (mantNorm < (1n << 52n)) {  // subnormal?
     binary = mantNorm;
     k = 7;
   } else {  // normalized

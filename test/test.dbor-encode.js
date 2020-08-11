@@ -215,17 +215,22 @@ describe('encoding helpers', function () {
     });
 
     it('minimum exponent', function () {
-      let [isNeg, mantNorm, exp2Norm] = dbor.normalizeBinaryRationalComponents(1n, -1022 - 52);
+      let [isNeg, mantNorm, exp2Norm] = dbor.normalizeBinaryRationalComponents(1n, -1022);
+      // 1.0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000_0000 * 2^-1022
+      assert.isTrue(mantNorm == 1n << 52n);
+      assert.deepEqual([isNeg, exp2Norm], [false, -1022 - 52]);
+
+      [isNeg, mantNorm, exp2Norm] = dbor.normalizeBinaryRationalComponents(1n, -1022 - 52);
       assert.isTrue(mantNorm == 1n);
       assert.deepEqual([isNeg, exp2Norm], [false, -1022 - 52]);
 
       assert.throws(function () { dbor.normalizeBinaryRationalComponents(1n, -1022 - 53); }, RangeError);
 
-      [isNeg, mantNorm, exp2Norm] = dbor.normalizeBinaryRationalComponents(-((1n << 52n) - 1n), -1022 - 52);
-      assert.isTrue(mantNorm == (1n << 52n) - 1n);
+      [isNeg, mantNorm, exp2Norm] = dbor.normalizeBinaryRationalComponents(-((1n << 53n) - 1n), -1022 - 52);
+      assert.isTrue(mantNorm == (1n << 53n) - 1n);
       assert.deepEqual([isNeg, exp2Norm], [true, -1022 - 52]);
 
-      assert.throws(function () { dbor.normalizeBinaryRationalComponents(-((1n << 53n) - 1n), -1022 - 52); }, RangeError);
+      assert.throws(function () { dbor.normalizeBinaryRationalComponents(-((1n << 53n) - 1n), -1022 - 53); }, RangeError);
     });
   });
 
