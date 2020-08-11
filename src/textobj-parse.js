@@ -379,7 +379,7 @@ textobj.Parser = class {
   //
   // Syntax:
   //
-  //   <special-literal> ::= 'None' | '+Inf' | 'Inf'.
+  //   <special-literal> ::= "None" | "+Inf" | "Inf".
 
   consumeSpecialLiteral () {  // -> textobj.SpecialLiteral(literal)
     const m = this.unparsed.match(/^([+-])?[A-Za-z][A-Za-z_0-9]*/);  // identifier-like
@@ -396,6 +396,67 @@ textobj.Parser = class {
   }
 
 
+  // Consume the longest prefix of the unparsed text that is a
+  // <quoted-string> (at least two character)
+  // and return it as a string of valid Unicode codepoints in normalization from C (NFC).
+  //
+  // Invalid if <number> contains "." or <exp-factor>, or represents a number
+  // outside the ranges 0 ... 0xD7FFF, 0xE000 .. 0x10FFFF.
+  //
+  // Syntax:
+  //
+  //   <quoted-string> ::= '"' '"'.
+  //   <character> ::= <normal-character> | "{{" | "}}" | <character-from-codepoint>.
+  //   <normal-character> ::= any unicode character except '"', "{", "}".
+  //   <character-from-codepoint> ::= "{" <number> "}"-
+
+  consumeQuotedString () {  // -> String
+    if (!this.unparsed || this.unparsed[0] != '"')
+      throw new textobj.InputError('missing string', this.index);
+
+    this.advance(1);
+    let stringValue = '';
+
+    while (true) {
+      if (!this.unparsed)
+        throw new textobj.InputError("missing '\"'", this.index);
+
+      const cp = this.unparsed.codePointAt(0);
+      const c = String.fromCodePoint(cp);
+      if (!this.unparsed.startsWith(c) || cp > 0x10FFFF)
+        throw new textobj.InputError('Unicode error', this.index);
+
+      this.advance(c.length);
+
+      if (c == '"' || c == '{' || c == '}') {
+        if (c == '"')
+          break;
+
+        if (this.unparsed[0] == c) { // '{{' or '}}'
+          stringValue += c;
+          this.advance(1);
+        } else if (c == '{') {
+          if (!this.unparsed.match(/^([+-])?[0-9]/))
+            throw new textobj.InputError("missing '{' or code point as integer number", this.index);
+          const [v, parsedlength] = textobj.parseSimpleInteger(this.unparsed, this.index);
+          if (!(v >= 0n && v < 0xD800n || v > 0xDFFFn && v <= 0x10FFFFn))
+            throw new textobj.InputError('number invalid as Unicode code point', this.index);
+          this.advance(parsedlength);
+          if (this.unparsed[0] != '}')
+            throw new textobj.InputError("missing '}'", this.index);
+          this.advance(1);
+          stringValue += String.fromCodePoint(Number(v));
+        } else
+          throw new textobj.InputError("missing '}'", this.index);
+      } else {
+        stringValue += c;
+      }
+    }
+
+    return new String(stringValue.normalize('NFC'));
+  }
+
+
   // TODO test
 
   parse () {  // [ InputRange(), ...]
@@ -407,12 +468,14 @@ textobj.Parser = class {
       const startIndex = this.index;
       let object = null;
       if (this.unparsed.match(/^([+-])?[0-9]/)) {
-        object = this.consumeNumber();
+        object = this.consumeNumber();  // '1.23', -'16#BEEF', '2^-34', ...
       } else if (this.unparsed.match(/^([+-])?[A-Za-z]/)) {
         object = this.consumeSpecialLiteral();  // 'None', '-Inf', ...
+      } else if (this.unparsed.match(/^"/)) {
+        object = this.consumeQuotedString();  // '"..."
       }
 
-      if (!object)
+      if (object == null)
         throw new textobj.InputError('missing object', startIndex);
       objects.push(new textobj.InputRange(startIndex, this.index - startIndex, object));
 

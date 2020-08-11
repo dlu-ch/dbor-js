@@ -696,4 +696,123 @@ describe('Parser', function () {
 
   });
 
+  describe('consumeQuotedString()', function () {
+
+    describe('valid', function () {
+      it('empty', function () {
+        let p = new textobj.Parser('""');
+        let s = p.consumeQuotedString();
+        assert.instanceOf(s, String);
+        assert.equal(s, '');
+        assert.equal(p.index, 2);
+      });
+
+      it('non-reserved ASCII only', function () {
+        let p = new textobj.Parser('"a\0bc"');
+        let s = p.consumeQuotedString();
+        assert.equal(s, 'a\0bc');
+        assert.equal(p.index, 2 + s.length);
+      });
+
+      it('valid unicode and escaped braces', function () {
+        const input = '"a\\{{b}}\u{10FFFF}c"';
+        let p = new textobj.Parser(input);
+        let s = p.consumeQuotedString();
+        assert.equal(s, 'a\\{b}\u{10FFFF}c'); // 7 codepoints, 8 UTF-16 code units
+        assert.equal(p.index, input.length);
+      });
+
+      it('code point in braces', function () {
+        let p = new textobj.Parser('"a{16#10FFFF}b"');
+        let s = p.consumeQuotedString();
+        assert.equal(s, 'a\u{10FFFF}b'); // 3 codepoints, 4 UTF-16 code units
+        assert.equal(p.index, 15);
+      });
+
+    });
+
+    describe('invalid', function () {
+
+      it('missing "', function () {
+        let p = new textobj.Parser('\n "');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeQuotedString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing '\"'");
+            assert.equal(error.index, 2 + 1);
+        }
+        assert.equal(p.index, 2 + 1);
+      });
+
+      it('missing }', function () {
+        let p = new textobj.Parser('\n "}"');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeQuotedString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing '}'");
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+      });
+
+      it('missing {', function () {
+        let p = new textobj.Parser('\n "{"');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeQuotedString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing '{' or code point as integer number");
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+      });
+
+      it('non-integer codepoint', function () {
+        let p = new textobj.Parser('\n "{1.23}"');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeQuotedString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "invalid in integer number: '.'");
+            assert.equal(error.index, 2 + 3);
+        }
+        assert.equal(p.index, 2 + 2);
+      });
+
+      it('invalid codepoint: surrogate', function () {
+        let p = new textobj.Parser('\n "{16#D800}"');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeQuotedString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "number invalid as Unicode code point");
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+      });
+
+      it('invalid codepoint: negative', function () {
+        let p = new textobj.Parser('\n "{-42}"');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeQuotedString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "number invalid as Unicode code point");
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+      });
+
+    });
+
+  });
+
 });
