@@ -72,7 +72,7 @@ Requires browser supports of:
       span.sequence.dbor-numberlike span.firstinsequence {
         color: black;
       }
-      span.sequence.dbor-utf8string span.firstinsequence {
+      span.sequence.dbor-string span.firstinsequence {
         color: green;
       }
 
@@ -111,7 +111,7 @@ Requires browser supports of:
       <table class="alignonly">
         <tr>
           <td class="firstcol"><button id="button-encode" title="Ctrl+Enter">Encode</button></td>
-          <td><span id="span-encoding-error">&#x26A0; Browser does not comply with ECMAScript 2020 or scripts are (partially) disabled.</span></td>
+          <td><span id="span-encoding-error">&#x26A0; Browser does not comply with ECMAScript 2020 or scripts are (partially) disabled</span></td>
         </tr>
       </table>
       <p></p>
@@ -132,11 +132,13 @@ Requires browser supports of:
               <a href="?q=-0.75%2C%0A1.25*10%5E9">decimal rationals</a>,
               <a href="?q=0.25*2%5E-1%2C%0A2%5E-16%233FE%2C%0A-2%231.1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_*_2%5E1024">binary rationals</a></li>
           <li>Numberlikes: <a href="?q=-0%2C%0AInf%2C%0A-Inf">-0 and &#xB1;&#x221E;</a></li>
-          <li><a href="?q=%22%C2%A1Ol%C3%A9!%22%2C%0A%22braces%20%7B%7B%2C%20%7D%7D%20are%20escaped%20by%20doubling%22%2C%0A%22character%20by%20code%20point%3A%20%7B16%2310_FFFF%7D%22%2C%0A%22double%20quote%3A%20%7B34%7D%22">UTF-8 strings</a></li>
+          <li>Strings: <a href="?q=%3C%3E%2C%0A%3C2%231111_0001%2C%200%2C%2016%23FF%3E">bytes</a>,
+              <a href="?q=%22%C2%A1Ol%C3%A9!%22%2C%0A%22braces%20%7B%7B%2C%20%7D%7D%20are%20escaped%20by%20doubling%22%2C%0A%22character%20by%20code%20point%3A%20%7B16%2310_FFFF%7D%22%2C%0A%22double%20quote%3A%20%7B34%7D%22">UTF-8 characters</a></li>
         </ul>
       </par>
 
       Built with <a href="https://github.com/dlu-ch/dbor-js/">dbor-js</a>.
+      Encoding happens entirely in the browser; no part of the input data is sent to a server.
     </div>
 
     <script type="text/javascript">
@@ -233,8 +235,11 @@ Requires browser supports of:
                 }
               }
             } else if (object instanceof String) {
-              dborClass = 'Utf8String';
+              dborClass = 'String';
               encoder.appendUtf8String(object);
+            } else if (object instanceof Uint8Array) {
+              dborClass = 'String';
+              encoder.appendByteString(object);
             }
 
             if (!dborClass)

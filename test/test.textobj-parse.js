@@ -824,6 +824,107 @@ describe('Parser', function () {
         assert.equal(p.index, 2 + 2);
       });
 
+
+    });
+
+  });
+
+  describe('consumeByteString()', function () {
+
+    describe('valid', function () {
+      it('empty', function () {
+        let p = new textobj.Parser('<>');
+        let s = p.consumeByteString();
+        assert.instanceOf(s, Uint8Array);
+        assert.deepEqual(s, new Uint8Array());
+        assert.equal(p.index, 2);
+      });
+
+      it('non-empty', function () {
+        const input = '<\n  2#1111_0101,0 \0, \t 16#FF >';
+        let p = new textobj.Parser(input);
+        let s = p.consumeByteString();
+        assert.instanceOf(s, Uint8Array);
+        assert.deepEqual(s, new Uint8Array([0xF5, 0x00, 0xFF]));
+        assert.equal(p.index, input.length);
+      });
+    });
+
+    describe('invalid', function () {
+      it('missing >', function () {
+        let p = new textobj.Parser('\n <123');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeByteString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing '>'");
+            assert.equal(error.index, 2 + 4);
+        }
+        assert.equal(p.index, 2 + 4);
+      });
+
+      it('missing >', function () {
+        let p = new textobj.Parser('\n <123 <');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeByteString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing ','");
+            assert.equal(error.index, 2 + 5);
+        }
+        assert.equal(p.index, 2 + 5);
+      });
+
+      it('missing number', function () {
+        let p = new textobj.Parser('\n <\n');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeByteString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'missing number');
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+
+        p = new textobj.Parser('\n <123 , >');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeByteString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'missing number');
+            assert.equal(error.index, 2 + 7);
+        }
+        assert.equal(p.index, 2 + 7);
+      });
+
+      it('number out of range', function () {
+        let p = new textobj.Parser('\n <123, -1>');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeByteString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'number outside range 0 .. 255');
+            assert.equal(error.index, 2 + 6);
+        }
+        assert.equal(p.index, 2 + 6);
+
+        p = new textobj.Parser('\n <123, 256>');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeByteString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'number outside range 0 .. 255');
+            assert.equal(error.index, 2 + 6);
+        }
+        assert.equal(p.index, 2 + 6);
+      });
+
     });
 
   });

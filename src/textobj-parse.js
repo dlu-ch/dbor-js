@@ -217,8 +217,13 @@ textobj.Parser = class {
     this.index += n;
   }
 
+  // Consume the longest prefix of the unparsed text that is an <optional-whitespace>.
+  //
+  // Syntax:
+  //
+  //   <optional-whitespace> ::= { <whitespace-character> }.
+  //   <whitespace-character> ::= any Unicode character with code point <= U+0020.
 
-  // Remove all characters with code points <= U+0020 at the beginning of the unparsed string.
   consumeOptionalWhitespace () {
     let n;
     for (n = 0; n < this.unparsed.length && this.unparsed.charCodeAt(n) <= 0x20; n += 1);
@@ -461,6 +466,52 @@ textobj.Parser = class {
   }
 
 
+  // Consume the longest prefix of the unparsed text that is a
+  // <byte-string> (at least two characters) and return it as an array of bytes.
+  //
+  // Invalid if any <number> contains "." or <exp-factor>, or represents a number
+  // outside the range 0 ... 0xFF.
+  //
+  // Syntax:
+  //
+  //   <byte-string> ::= "<" [ <ws-byte> { <optional-whitespace> "," <ws-byte> } ] <optional-whitespace> ">".
+  //   <optional-whitespace> ::= { <whitespace-character> }.
+  //   <ws-byte> ::= <optional-whitespace> <number>.
+
+  consumeByteString () {  // -> Uint8Array
+    if (this.unparsed[0] != '<')
+      throw new textobj.InputError('missing byte string', this.index);
+
+    this.advance(1);
+    this.consumeOptionalWhitespace();
+
+    let bytes = [];
+
+    if (this.unparsed[0] != '>') {
+      while (true) {
+        const [v, parsedlength] = textobj.parseSimpleInteger(this.unparsed, this.index);
+        if (!(v >= 0n && v <= 0xFFn))
+          throw new textobj.InputError('number outside range 0 .. 255', this.index);
+        bytes.push(Number(v));
+        this.advance(parsedlength);
+
+        this.consumeOptionalWhitespace();
+        if (!this.unparsed)
+          throw new textobj.InputError("missing '>'", this.index);
+        if (this.unparsed[0] == '>')
+          break;
+        if (this.unparsed[0] != ',')
+          throw new textobj.InputError("missing ','", this.index);
+        this.advance(1);
+        this.consumeOptionalWhitespace();
+      }
+    }
+    this.advance(1);
+
+    return new Uint8Array(bytes);
+  }
+
+
   // TODO test
 
   parse () {  // [ InputRange(), ...]
@@ -477,6 +528,8 @@ textobj.Parser = class {
         object = this.consumeSpecialLiteral();  // 'None', '-Inf', ...
       } else if (this.unparsed.match(/^"/)) {
         object = this.consumeQuotedString();  // "..."
+      } else if (this.unparsed.match(/^</)) {
+        object = this.consumeByteString();  // <...>
       }
 
       if (object == null)
