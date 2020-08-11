@@ -708,17 +708,17 @@ describe('Parser', function () {
       });
 
       it('non-reserved ASCII only', function () {
-        let p = new textobj.Parser('"a\0bc"');
+        let p = new textobj.Parser('"a bc"');
         let s = p.consumeQuotedString();
-        assert.equal(s, 'a\0bc');
+        assert.equal(s, 'a bc');
         assert.equal(p.index, 2 + s.length);
       });
 
       it('valid unicode and escaped braces', function () {
-        const input = '"a\\{{b}}\u{10FFFF}c"';
+        const input = '"a{0}\\{{b}}\u{10FFFF}c"';
         let p = new textobj.Parser(input);
         let s = p.consumeQuotedString();
-        assert.equal(s, 'a\\{b}\u{10FFFF}c'); // 7 codepoints, 8 UTF-16 code units
+        assert.equal(s, 'a\0\\{b}\u{10FFFF}c'); // 8 codepoints, 9 UTF-16 code units
         assert.equal(p.index, input.length);
       });
 
@@ -806,6 +806,19 @@ describe('Parser', function () {
         } catch (error) {
             assert.instanceOf(error, textobj.InputError);
             assert.equal(error.message, "number invalid as Unicode code point");
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+      });
+
+      it('control character', function () {
+        let p = new textobj.Parser('\n "a\n"');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeQuotedString()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "invalid raw control character - use '{16#A}' instead");
             assert.equal(error.index, 2 + 2);
         }
         assert.equal(p.index, 2 + 2);

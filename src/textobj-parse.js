@@ -397,7 +397,7 @@ textobj.Parser = class {
 
 
   // Consume the longest prefix of the unparsed text that is a
-  // <quoted-string> (at least two character)
+  // <quoted-string> (at least two characters)
   // and return it as a string of valid Unicode codepoints in normalization from C (NFC).
   //
   // Invalid if <number> contains "." or <exp-factor>, or represents a number
@@ -405,13 +405,13 @@ textobj.Parser = class {
   //
   // Syntax:
   //
-  //   <quoted-string> ::= '"' '"'.
-  //   <character> ::= <normal-character> | "{{" | "}}" | <character-from-codepoint>.
-  //   <normal-character> ::= any unicode character except '"', "{", "}".
+  //   <quoted-string> ::= '"' { <character> } '"'.
+  //   <character> ::= <safe-character> | "{{" | "}}" | <character-from-codepoint>.
+  //   <safe-character> ::= any Unicode character with code point >= U+0020 except '"', "{", "}".
   //   <character-from-codepoint> ::= "{" <number> "}"-
 
   consumeQuotedString () {  // -> String
-    if (!this.unparsed || this.unparsed[0] != '"')
+    if (this.unparsed[0] != '"')
       throw new textobj.InputError('missing string', this.index);
 
     this.advance(1);
@@ -422,6 +422,10 @@ textobj.Parser = class {
         throw new textobj.InputError("missing '\"'", this.index);
 
       const cp = this.unparsed.codePointAt(0);
+      if (cp < 0x20) {
+        const hcp = cp.toString(16).toUpperCase();
+        throw new textobj.InputError(`invalid raw control character - use '{16#${hcp}}' instead`, this.index);
+      }
       const c = String.fromCodePoint(cp);
       if (!this.unparsed.startsWith(c) || cp > 0x10FFFF)
         throw new textobj.InputError('Unicode error', this.index);
@@ -472,7 +476,7 @@ textobj.Parser = class {
       } else if (this.unparsed.match(/^([+-])?[A-Za-z]/)) {
         object = this.consumeSpecialLiteral();  // 'None', '-Inf', ...
       } else if (this.unparsed.match(/^"/)) {
-        object = this.consumeQuotedString();  // '"..."
+        object = this.consumeQuotedString();  // "..."
       }
 
       if (object == null)
