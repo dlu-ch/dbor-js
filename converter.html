@@ -22,6 +22,7 @@ Requires browser supports of:
         font-family: Helvetica, Arial, sans-serif;
       }
 
+      /* table for alignement only */
       table.alignonly {
         border: none;
         border-spacing: 0px;
@@ -33,6 +34,7 @@ Requires browser supports of:
         padding-left: 0px;
       }
 
+      /* elements dependent on state (valid, invalid, unknown) */
       div#div-representation textarea.input,
       div#div-representation div.noninput {
         font-size: smaller;
@@ -59,8 +61,12 @@ Requires browser supports of:
         display: inline;
       }
 
+      /* elements representing DBOR encoded byte sequences */
       span.sequence span.firstinsequence {
         font-weight: bold;
+      }
+      span.sequence.dbor-none span.firstinsequence {
+        color: red;
       }
       span.sequence.dbor-number span.firstinsequence,
       span.sequence.dbor-numberlike span.firstinsequence {
@@ -117,12 +123,12 @@ Requires browser supports of:
       <par>
         Examples:
         <ul>
-          <li><a href="?q=-16%23FFFF_FFFF">hexadecimal integer</a></li>
-          <li><a href="?q=1.25*10^9">decimal rational</a></li>
-          <li><a href="?q=0.25*2^-1">binary rational with decimal mantissa</a></li>
-          <li><a href="?q=2%5E-1022">smallest positive binary rational</a></li>
-          <li><a href="?q=-2%231.1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_%2A_2%5E1024">smallest binary rational</a></li>
-          <li><a href="?q=-0">-0</a></li>
+          <li><a href="?q=None">None</a></li>
+          <li>Numbers:
+              <a href="?q=12_345_000%2C%0A-16%23FFFF_FFFF%2C%0A2%2311001111%2C%0A36%23LETSFETZ">integers</a>,
+              <a href="?q=-0.75%2C%0A1.25*10%5E9">decimal rationals</a>,
+              <a href="?q=0.25*2%5E-1%2C%0A2%5E-16%233FE%2C%0A-2%231.1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_*_2%5E1024">binary rationals</a></li>
+          <li>Numberlikes: <a href="?q=-0%2C%0AInf%2C%0A-Inf">-0 and &#xB1;&#x221E;</a></li>
         </ul>
       </par>
     </div>
@@ -183,27 +189,47 @@ Requires browser supports of:
           const object = inputRangeWithObject.object;
           try {
             let encoder = new dbor.Encoder();
+            let dborClass = null;  // will correspond to CSS class
 
-            if (!(object instanceof textobj.IntegerWithExpFactor))
-              throw new TypeError('unsupported type');
-
-            // TODO improve error encoder messages
-
-            const number = object;
-            let dborClass = 'Number';  // will correspond to CSS class
-            if (number.mant === 0n && number.isNeg) {
-              encoder.appendMinusZero();
-              dborClass = 'Numberlike';
-            } else if (!number.base) {
-              encoder.appendInteger(number.mant);
-            } else if (number.base === 10n) {
-              if (number.exp != 0n)
-                encoder.appendDecimalRational(number.mant, number.exp)
-              else
-                encoder.appendInteger(number.mant)
-            } else {
-              encoder.appendBinaryRational(number.mant, number.exp);
+            if (object instanceof textobj.IntegerWithExpFactor) {
+              const number = object;
+              dborClass = 'Number';
+              if (number.mant === 0n && number.isNeg) {
+                encoder.appendMinusZero();
+                dborClass = 'Numberlike';
+              } else if (!number.base) {
+                encoder.appendInteger(number.mant);
+              } else if (number.base === 10n) {
+                if (number.exp != 0n)
+                  encoder.appendDecimalRational(number.mant, number.exp)
+                  // TODO improve error encoder messages
+                else
+                  encoder.appendInteger(number.mant)
+              } else {
+                encoder.appendBinaryRational(number.mant, number.exp);
+              }
+            } else if (object instanceof textobj.SpecialLiteral) {
+              switch (object.literal) {
+                case 'None': {
+                  dborClass = 'None';
+                  encoder.appendNone();
+                  break;
+                }
+                case 'Inf': {
+                  dborClass = 'Numberlike';
+                  encoder.appendInfinity();
+                  break;
+                }
+                case '-Inf': {
+                  dborClass = 'Numberlike';
+                  encoder.appendMinusInfinity();
+                  break;
+                }
+              }
             }
+
+            if (!dborClass)
+              throw new TypeError('unsupported type');
 
             inputRangesWithEncodedObjects.push(
               new textobj.InputRange(

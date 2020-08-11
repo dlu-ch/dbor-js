@@ -632,4 +632,68 @@ describe('Parser', function () {
     });
   });
 
+  describe('consumeSpecialLiteral()', function () {
+
+    describe('valid', function () {
+      it('None', function () {
+        let p = new textobj.Parser('None');
+        let o = p.consumeSpecialLiteral();
+        assert.equal(o.literal, 'None');
+        assert.equal(p.index, 4);
+      });
+
+      it('Inf', function () {
+        let p = new textobj.Parser('Inf ');
+        let o = p.consumeSpecialLiteral();
+        assert.equal(o.literal, 'Inf');
+        assert.equal(p.index, 3);
+      });
+
+      it('+Inf', function () {
+        let p = new textobj.Parser('+Inf');
+        let o = p.consumeSpecialLiteral();
+        assert.equal(o.literal, 'Inf');
+        assert.equal(p.index, 4);
+      });
+
+      it('-Inf', function () {
+        let p = new textobj.Parser('-Inf,');
+        let o = p.consumeSpecialLiteral();
+        assert.equal(o.literal, '-Inf');
+        assert.equal(p.index, 4);
+      });
+
+    });
+
+    describe('invalid', function () {
+      it('+None', function () {
+        let p = new textobj.Parser('\n +None');
+        p.consumeOptionalWhitespace();
+        try {
+          p.consumeSpecialLiteral();
+        } catch (error) {
+          assert.instanceOf(error, textobj.InputError);
+          assert.equal(error.message, 'unknown literal');
+          assert.equal(error.index, 2 + 0);
+        }
+        assert.equal(p.index, 2);
+      });
+
+      it('non-letter suffix', function () {
+        let p = new textobj.Parser('\n None_123');
+        p.consumeOptionalWhitespace();
+        try {
+          p.consumeSpecialLiteral();
+        } catch (error) {
+          assert.instanceOf(error, textobj.InputError);
+          assert.equal(error.message, 'unknown literal');
+          assert.equal(error.index, 2 + 0);
+        }
+        assert.equal(p.index, 2);
+      });
+
+    });
+
+  });
+
 });

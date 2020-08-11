@@ -17,7 +17,7 @@ textobj.InputError = class extends Error {
 };
 
 
-textobj.InputTypeError = class extends textobj.InputError {
+textobj.InputTypeError = class extends textobj.InputError {  // TODO remove
 };
 
 
@@ -25,13 +25,23 @@ textobj.Object = class {
 };
 
 
+// e.g. 1.23 * 10^3
 textobj.IntegerWithExpFactor = class extends textobj.Object {
-  constructor(mant, base, exp, isNeg) {
+  constructor(mant /* BigInt */, base /* BigInt */, exp /* BigInt or null */, isNeg /* Boolean */) {
     super();
     this.mant = BigInt(mant || 0);
     this.exp = BigInt(exp || 0);
     this.base = base == null ? null : BigInt(base);
     this.isNeg = (isNeg || this.mant < 0n) && this.mant <= 0n;
+  }
+};
+
+
+// e.g. 'None'
+textobj.SpecialLiteral = class extends textobj.Object {
+  constructor(literal /* String */) {
+    super();
+    this.literal = String(literal)
   }
 };
 
@@ -221,7 +231,7 @@ textobj.Parser = class {
 
 
   // Consume the longest prefix of the unparsed text that is a number <number> (at least one character)
-  // an return [isNeg, mant, base, exp] as an exact representation of the parsed number.
+  // and return [isNeg, mant, base, exp] as an exact representation of the parsed number.
   //
   // 'base' is 2n or 10n or null.
   // 'base' is null if and only if <number> contains <mantissa> with "." or an <exp-factor>.
@@ -383,6 +393,29 @@ textobj.Parser = class {
   }
 
 
+  // Consume the longest prefix of the unparsed text that is a
+  // <special-literal> (at least one character)
+  // and return it as a string without leading '+'.
+  //
+  // Syntax:
+  //
+  //   <special-literal> ::= 'None' | '+Inf' | 'Inf'.
+
+  consumeSpecialLiteral () {  // -> textobj.SpecialLiteral(literal)
+    const m = this.unparsed.match(/^([+-])?[A-Za-z][A-Za-z_0-9]*/);  // identifier-like
+    if (!m)
+      throw new textobj.InputTypeEror('missing special literal', this.index);
+
+    const literal = m[0];
+    const normalizedLiteralByLiteral = {'None': 'None', 'Inf': 'Inf', '+Inf': 'Inf', '-Inf': '-Inf'};
+    if (!(literal in normalizedLiteralByLiteral))
+      throw new textobj.InputError('unknown literal', this.index);
+
+    this.advance(literal.length);
+    return new textobj.SpecialLiteral(normalizedLiteralByLiteral[literal]);
+  }
+
+
   // TODO test
 
   parse () {  // [ InputRange(), ...]
@@ -392,8 +425,16 @@ textobj.Parser = class {
       this.consumeOptionalWhitespace();
 
       const startIndex = this.index;
-      const number = this.consumeNumber();
-      objects.push(new textobj.InputRange(startIndex, this.index - startIndex, number));
+      let object = null;
+      if (this.unparsed.match(/^([+-])?[0-9]/)) {
+        object = this.consumeNumber();
+      } else if (this.unparsed.match(/^([+-])?[A-Za-z]/)) {
+        object = this.consumeSpecialLiteral();  // 'None', '-Inf', ...
+      }
+
+      if (!object)
+        throw new textobj.InputError('missing object', startIndex);
+      objects.push(new textobj.InputRange(startIndex, this.index - startIndex, object));
 
       this.consumeOptionalWhitespace();
       if (!this.unparsed)
