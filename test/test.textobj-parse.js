@@ -132,7 +132,7 @@ describe('parser helpers', function () {
         try {
           textobj.parseSimpleNumber('');
         } catch (error) {
-          assert.instanceOf(error, textobj.InputTypeError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -142,7 +142,7 @@ describe('parser helpers', function () {
         try {
           textobj.parseSimpleNumber('-');
         } catch (error) {
-          assert.instanceOf(error, textobj.InputTypeError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -152,7 +152,7 @@ describe('parser helpers', function () {
         try {
           textobj.parseSimpleNumber('A');
         } catch (error) {
-          assert.instanceOf(error, textobj.InputTypeError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -162,7 +162,7 @@ describe('parser helpers', function () {
         try {
           textobj.parseSimpleNumber('_');
         } catch (error) {
-          assert.instanceOf(error, textobj.InputTypeError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -172,7 +172,7 @@ describe('parser helpers', function () {
         try {
           textobj.parseSimpleNumber('.');
         } catch (error) {
-          assert.instanceOf(error, textobj.InputTypeError);
+          assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'missing number');
           assert.equal(error.index, 0);
         }
@@ -536,7 +536,7 @@ describe('Parser', function () {
         try {
             p.consumeNumber()
         } catch (error) {
-            assert.instanceOf(error, textobj.InputTypeError);
+            assert.instanceOf(error, textobj.InputError);
         }
         assert.equal(p.index, 2);
       });
@@ -549,10 +549,10 @@ describe('Parser', function () {
         } catch (error) {
           assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message,
-                      "non-integer mantissa in base 3 cannot be represented exactly in base 10");
+                       'non-integer mantissa in base 3 cannot be represented exactly in base 10');
           assert.equal(error.index, 2 + 5);
         }
-        assert.equal(p.index, 2);
+        assert.equal(p.index, 2 + 15);
       });
 
       it('syntax error in mantissa', function () {
@@ -578,7 +578,7 @@ describe('Parser', function () {
           assert.equal(error.message, 'invalid digit for base 2 number');
           assert.equal(error.index, 2 + 15);
         }
-        assert.equal(p.index, 2);
+        assert.equal(p.index, 2 + 11);
       });
 
       it('syntax error in exponent (without mantissa)', function () {
@@ -591,7 +591,7 @@ describe('Parser', function () {
           assert.equal(error.message, 'invalid digit for base 2 number');
           assert.equal(error.index, 2 + 7);
         }
-        assert.equal(p.index, 2);
+        assert.equal(p.index, 2 + 4);
       });
 
       it('syntax error between mantissa and exponent', function () {
@@ -604,7 +604,7 @@ describe('Parser', function () {
           assert.equal(error.message, 'missing digit or exponentiation factor');
           assert.equal(error.index, 2 + 4);
         }
-        assert.equal(p.index, 2);
+        assert.equal(p.index, 2 + 4);
       });
 
     });
