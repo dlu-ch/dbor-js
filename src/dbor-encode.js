@@ -246,6 +246,44 @@ dbor.encodeCanonicalBinaryRationalToken = function (mant, exp2) {
 };
 
 
+// Compare byte sequences, represented by arrays if Number or BigInt, according to DBOR strict order.
+// -1 if a < b; 1 if a > b; 0 if a = b.
+dbor.compareByteSequences = function (a /* Array */, b /* Array */) {  // -> -1, 0, or 1
+  if (!a)
+    a = [];
+  if (!b)
+    b = [];
+
+  if (!a.length && !b.length)
+    return 0;
+  if (!a.length)
+    return -1;
+  if (!b.length)
+    return 1;
+
+  // a, b are not empty
+
+  if (a[0] < b[0])
+    return -1;
+  if (a[0] > b[0])
+    return 1;
+
+  if (a.length < b.length)
+    return -1;
+  if (a.length > b.length)
+    return 1;
+
+  for (let i = a.length - 1; i > 1; i -= 1) {
+    if (a[i] < b[i])
+      return -1;
+    if (a[i] > b[i])
+      return 1;
+  }
+
+  return 0;
+}
+
+
 dbor.Encoder = class {
   constructor() {
     this.bytes = [];  // TODO to Uint8Array?
@@ -369,6 +407,14 @@ dbor.Encoder = class {
   // Throws RangeError if contentSize too large.
   appendSequenceHeader (contentSize) {
     this.bytes = this.bytes.concat(dbor.encodeIntegerToken(4, contentSize));
+    return this;
+  }
+
+
+  // Append the header of a DictionaryValue, to be followed by exactly contentSize bytes.
+  // Throws RangeError if contentSize too large.
+  appendDictionaryHeader (contentSize) {
+    this.bytes = this.bytes.concat(dbor.encodeIntegerToken(5, contentSize));
     return this;
   }
 

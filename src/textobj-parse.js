@@ -42,14 +42,26 @@ textobj.SpecialLiteral = class extends textobj.Object {
 };
 
 
-// e.g. 'None'
-textobj.Sequence = class extends textobj.Object {
-  constructor(parsedObjects /* ??? */) {
+textobj.Container = class extends textobj.Object {
+};
+
+
+// e.g. [1, 2, 3]
+textobj.Sequence = class extends textobj.Container {
+  constructor(parsedObjects /* [e1, ..., en] */) {
     super();
     this.parsedObjects = parsedObjects;
   }
 };
 
+
+// e.g. {1: 2, 3: 4}
+textobj.Dictionary = class extends textobj.Container {
+  constructor(parsedObjectPairs /* [[k1, v1], ..., [kn, vn]] */) {
+    super();
+    this.parsedObjectPairs = parsedObjectPairs;
+  }
+};
 
 
 // Input from UTF-16 code unit 'index' to UTF-16 code unit
@@ -423,8 +435,10 @@ textobj.Parser = class {
   //   <quoted-string> ::= '"' { <character> } '"'.
   //   <character> ::= <safe-character> | "{{" | "}}" | <character-from-codepoint>.
   //   <safe-character> ::= any Unicode character with code point >= U+0020 except '"', "{", "}".
-  //   <character-from-codepoint> ::= "{" <number> "}"-
+  //   <character-from-codepoint> ::= "{" <number> "}".
 
+  // TODO rename to consumeUnicodeString
+  // TODO return texobj.UnicodeString
   consumeQuotedString () {  // -> String
     if (this.unparsed[0] != '"')
       throw new textobj.InputError('missing string', this.index);
@@ -488,6 +502,7 @@ textobj.Parser = class {
   //   <optional-whitespace> ::= { <whitespace-character> }.
   //   <ws-byte> ::= <optional-whitespace> <number>.
 
+  // TODO return texobj.ByteString
   consumeByteString () {  // -> Uint8Array
     if (this.unparsed[0] != '<')
       throw new textobj.InputError('missing byte string', this.index);
@@ -529,10 +544,9 @@ textobj.Parser = class {
   //
   //   <sequence> ::= "[" [ <ws-sequence-element> { <optional-whitespace> "," <ws-sequence-element> } ] <optional-whitespace> "]".
   //   <optional-whitespace> ::= { <whitespace-character> }.
-  //   <ws-sequence-element> ::= <optional-whitespace> <sequence-element>.
-  //   <sequence-element> ::= <number> | <special-literal> | <quoted-string> | <byte-string> | <sequence>.
+  //   <ws-sequence-element> ::= <optional-whitespace> <object>.
 
-  consumeSequence () {  // -> textobj.Sequence([textobj.InputRange(..., textobj.Object(...)), ...])
+  consumeSequence () {  // -> textobj.Sequence([textobj.InputRange(..., o1), ..., textobj.InputRange(..., on)])
     if (this.unparsed[0] != '[')
       throw new textobj.InputError('missing sequence', this.index);
 
@@ -561,21 +575,76 @@ textobj.Parser = class {
   }
 
 
+  // Consume the longest prefix of the unparsed text that is a
+  // <dictionary> (at least two characters) and return it as a textobj.Dictionary.
+  //
+  // Valid with duplicate keys.
+  //
+  // Syntax:
+  //
+  //   <dictionary> ::= "{" [ <ws-dictionary-item> ":" { <optional-whitespace> "," <ws-dictionary-item> } ] <optional-whitespace> "}".
+  //   <optional-whitespace> ::= { <whitespace-character> }.
+  //   <ws-dictionary-item> ::= <optional-whitespace> <object> <optional-whitespace> ":" <object> <optional-whitespace>.
+
+  consumeDictionary () {    // -> textobj.Dictionary([textobj.InputRange(..., [k1, o1]), ..., textobj.InputRange(..., [kn, on])])
+    if (this.unparsed[0] != '{')
+      throw new textobj.InputError('missing dictionary', this.index);
+
+    this.advance();
+    this.consumeOptionalWhitespace();
+
+    let parsedObjectPairs = [];
+
+    if (this.unparsed[0] != '}') {
+      while (true) {
+        const key = this.parseObject();
+        this.consumeOptionalWhitespace();
+        if (this.unparsed[0] != ':')
+          throw new textobj.InputError("missing ':'", this.index);
+        this.advance();
+        this.consumeOptionalWhitespace();
+
+        const value = this.parseObject();
+        parsedObjectPairs.push([key, value]);
+
+        this.consumeOptionalWhitespace();
+        if (!this.unparsed)
+          throw new textobj.InputError("missing '}'", this.index);
+
+        if (this.unparsed[0] == '}')
+          break;
+        if (this.unparsed[0] != ',')
+          throw new textobj.InputError("missing ','", this.index);
+        this.advance();
+        this.consumeOptionalWhitespace();
+      }
+    }
+    this.advance();
+
+    return new textobj.Dictionary(parsedObjectPairs);
+  }
+
+
+  // Syntax:
+  //
+  //   <object> ::= <number> | <special-literal> | <quoted-string> | <byte-string> | <sequence> | <dictionary>.
+
   parseObject () {  // -> InputRange(...)
+    const startIndex = this.index;
     let object = null;
 
-    const startIndex = this.index;
-    if (this.unparsed.match(/^([+-])?[0-9]/)) {
+    if (this.unparsed.match(/^([+-])?[0-9]/))
       object = this.consumeNumber();  // '1.23', -'16#BEEF', '2^-34', ...
-    } else if (this.unparsed.match(/^([+-])?[A-Za-z]/)) {
+    else if (this.unparsed.match(/^([+-])?[A-Za-z]/))
       object = this.consumeSpecialLiteral();  // 'None', '-Inf', ...
-    } else if (this.unparsed.match(/^"/)) {
+    else if (this.unparsed[0] == '"')
       object = this.consumeQuotedString();  // "..."
-    } else if (this.unparsed.match(/^</)) {
+    else if (this.unparsed[0] == '<')
       object = this.consumeByteString();  // <...>
-    } else if (this.unparsed.match(/^\[/)) {
+    else if (this.unparsed[0] == '[')
       object = this.consumeSequence();  // [ ... ]
-    }
+    else if (this.unparsed[0] == '{')
+      object = this.consumeDictionary();  // { ... }
 
     if (object == null)
       throw new textobj.InputError('missing object', startIndex);

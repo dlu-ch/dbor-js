@@ -325,6 +325,34 @@ describe('encoding helpers', function () {
 
   });
 
+  describe('compareByteSequences()', function () {
+    it('one is empty', function () {
+      assert.equal(dbor.compareByteSequences([], []), 0);
+      assert.equal(dbor.compareByteSequences([], [0]), -1);
+      assert.equal(dbor.compareByteSequences([0], []), 1);
+    });
+
+    it('non-empty with different first byte', function () {
+      assert.equal(dbor.compareByteSequences([0, 0], [1]), -1);
+      assert.equal(dbor.compareByteSequences([1], [0, 0]), 1);
+    });
+
+    it('non-empty with same first byte and different length', function () {
+      assert.equal(dbor.compareByteSequences([0, 0], [0]), 1);
+      assert.equal(dbor.compareByteSequences([0], [0, 0]), -1);
+    });
+
+    it('non-empty with same first byte and same length', function () {
+      assert.equal(dbor.compareByteSequences([0, 3, 1, 2], [0, 0, 2, 2]), -1);
+      assert.equal(dbor.compareByteSequences([0, 0, 2, 2], [0, 3, 1, 2]), 1);
+    });
+
+    it('non-empty, same', function () {
+      assert.equal(dbor.compareByteSequences([0, 3, 1, 2], [0, 3, 1, 2]), 0)
+    });
+
+  });
+
 });
 
 describe('Encoder', function () {
@@ -559,6 +587,27 @@ describe('Encoder', function () {
     it('negative size', function () {
       let e = new dbor.Encoder();
       assert.throws(function () { e.appendSequenceHeader(-1); }, RangeError);
+    });
+  });
+
+  describe('Dictionary', function () {
+    it('typical', function () {
+      let e = new dbor.Encoder();
+      e.appendDictionaryHeader(0);
+      assert.deepEqual(e.bytes, [0xA0]);
+
+      e = new dbor.Encoder();
+      e.appendDictionaryHeader(0x17);
+      assert.deepEqual(e.bytes, [0xB7]);
+
+      e = new dbor.Encoder();
+      e.appendDictionaryHeader(0xFFFFFFFF);
+      assert.deepEqual(e.bytes, [0xBB, 0xE7, 0xFE, 0xFE, 0xFE]);
+    });
+
+    it('negative size', function () {
+      let e = new dbor.Encoder();
+      assert.throws(function () { e.appendDictionaryHeader(-1); }, RangeError);
     });
   });
 
