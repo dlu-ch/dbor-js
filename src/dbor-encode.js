@@ -103,7 +103,16 @@ dbor.encodeIntegerToken = function (h, value) {
   let first = (Number(h) & 7) << 5;
   if (value <= 0x17)
     return [first | Number(value)];
-  const data = dbor.encodeNaturalTokenData(BigInt(value) - 0x17n);
+
+  let data;
+  try {
+    data = dbor.encodeNaturalTokenData(BigInt(value) - 0x17n);
+  } catch (error) {
+    if (error instanceof RangeError)
+      throw new RangeError('magnitude (or width of mantissa) too large');
+    throw error;
+  }
+
   return [first | 0x18 | (data.length - 1)].concat(data);
 };
 
@@ -117,7 +126,15 @@ dbor.encodePowerOfTenToken = function (value) {
   const h = 0xC0 | (value < 0 ? 8 : 0);
   if (valueAbs <= 8n)
     return [h | 0x20 | (Number(valueAbs) - 1)];
-  const data = dbor.encodeNaturalTokenData(valueAbs - 8n);
+
+  let data;
+  try {
+    data = dbor.encodeNaturalTokenData(valueAbs - 8n);
+  } catch (error) {
+    if (error instanceof RangeError)
+      throw new RangeError('magnitude of exponent too large');
+    throw error;
+  }
   return [h | 0x10 | (data.length - 1)].concat(data);
 };
 
@@ -286,7 +303,7 @@ dbor.compareByteSequences = function (a /* Array */, b /* Array */) {  // -> -1,
 
 dbor.Encoder = class {
   constructor() {
-    this.bytes = [];  // TODO to Uint8Array?
+    this.bytes = [];
   }
 
   // Append a NoneValue.
@@ -419,3 +436,6 @@ dbor.Encoder = class {
   }
 
 };
+
+
+dbor.loaded = true;

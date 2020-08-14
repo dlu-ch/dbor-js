@@ -42,6 +42,24 @@ textobj.SpecialLiteral = class extends textobj.Object {
 };
 
 
+// e.g. <1, 2, 3>
+textobj.ByteString = class extends textobj.Object {
+  constructor(value /* Uint8Array */) {
+    super();
+    this.value = new Uint8Array(value);
+  }
+};
+
+
+// e.g. "Hello!"
+textobj.UnicodeString = class extends textobj.Object {
+  constructor(value /* String */) {
+    super();
+    this.value = String(value);
+  }
+};
+
+
 textobj.Container = class extends textobj.Object {
 };
 
@@ -402,7 +420,7 @@ textobj.Parser = class {
 
   // Consume the longest prefix of the unparsed text that is a
   // <special-literal> (at least one character)
-  // and return it as a string without leading '+'.
+  // and return it as one of the string 'None', 'Infinity', 'MinusInfinity'.
   //
   // Syntax:
   //
@@ -414,7 +432,7 @@ textobj.Parser = class {
       throw new textobj.InputError('missing special literal', this.index);
 
     const literal = m[0];
-    const normalizedLiteralByLiteral = {'None': 'None', 'Inf': 'Inf', '+Inf': 'Inf', '-Inf': '-Inf'};
+    const normalizedLiteralByLiteral = {'None': 'None', 'Inf': 'Infinity', '+Inf': 'Infinity', '-Inf': 'MinusInfinity'};
     if (!(literal in normalizedLiteralByLiteral))
       throw new textobj.InputError('unknown literal', this.index);
 
@@ -424,7 +442,7 @@ textobj.Parser = class {
 
 
   // Consume the longest prefix of the unparsed text that is a
-  // <quoted-string> (at least two characters)
+  // <unicode-string> (at least two characters)
   // and return it as a string of valid Unicode codepoints in normalization from C (NFC).
   //
   // Invalid if <number> contains "." or <exp-factor>, or represents a number
@@ -432,14 +450,12 @@ textobj.Parser = class {
   //
   // Syntax:
   //
-  //   <quoted-string> ::= '"' { <character> } '"'.
+  //   <unicode-string> ::= '"' { <character> } '"'.
   //   <character> ::= <safe-character> | "{{" | "}}" | <character-from-codepoint>.
   //   <safe-character> ::= any Unicode character with code point >= U+0020 except '"', "{", "}".
   //   <character-from-codepoint> ::= "{" <number> "}".
 
-  // TODO rename to consumeUnicodeString
-  // TODO return texobj.UnicodeString
-  consumeQuotedString () {  // -> String
+  consumeUnicodeString () {  // -> textobj.UnicodeString(value)
     if (this.unparsed[0] != '"')
       throw new textobj.InputError('missing string', this.index);
 
@@ -486,7 +502,7 @@ textobj.Parser = class {
       }
     }
 
-    return new String(stringValue.normalize('NFC'));
+    return new textobj.UnicodeString(stringValue.normalize('NFC'));
   }
 
 
@@ -502,8 +518,7 @@ textobj.Parser = class {
   //   <optional-whitespace> ::= { <whitespace-character> }.
   //   <ws-byte> ::= <optional-whitespace> <number>.
 
-  // TODO return texobj.ByteString
-  consumeByteString () {  // -> Uint8Array
+  consumeByteString () {  // -> textobj.ByteString(value)
     if (this.unparsed[0] != '<')
       throw new textobj.InputError('missing byte string', this.index);
 
@@ -533,7 +548,7 @@ textobj.Parser = class {
     }
     this.advance();
 
-    return new Uint8Array(bytes);
+    return new textobj.ByteString(bytes);
   }
 
 
@@ -627,7 +642,7 @@ textobj.Parser = class {
 
   // Syntax:
   //
-  //   <object> ::= <number> | <special-literal> | <quoted-string> | <byte-string> | <sequence> | <dictionary>.
+  //   <object> ::= <number> | <special-literal> | <unicode-string> | <byte-string> | <sequence> | <dictionary>.
 
   parseObject () {  // -> InputRange(...)
     const startIndex = this.index;
@@ -638,7 +653,7 @@ textobj.Parser = class {
     else if (this.unparsed.match(/^([+-])?[A-Za-z]/))
       object = this.consumeSpecialLiteral();  // 'None', '-Inf', ...
     else if (this.unparsed[0] == '"')
-      object = this.consumeQuotedString();  // "..."
+      object = this.consumeUnicodeString();  // "..."
     else if (this.unparsed[0] == '<')
       object = this.consumeByteString();  // <...>
     else if (this.unparsed[0] == '[')
@@ -652,8 +667,6 @@ textobj.Parser = class {
     return new textobj.InputRange(startIndex, this.index - startIndex, object);
   }
 
-
-  // TODO test
 
   parse () {  // -> [ InputRange(), ...]
     let objects = [];
@@ -674,3 +687,6 @@ textobj.Parser = class {
   }
 
 };
+
+
+textobj.loaded = true;

@@ -68,11 +68,16 @@ Requires browser supports of:
       span.sequence.dbor-none span.firstinsequence {
         color: red;
       }
-      span.sequence.dbor-number span.firstinsequence,
-      span.sequence.dbor-numberlike span.firstinsequence {
-        color: black;
+      span.sequence.dbor-integer span.firstinsequence,
+      span.sequence.dbor-binaryrational span.firstinsequence,
+      span.sequence.dbor-decimalrational span.firstinsequence,
+      span.sequence.dbor-minuszero span.firstinsequence,
+      span.sequence.dbor-infinity span.firstinsequence,
+      span.sequence.dbor-minusinfinity span.firstinsequence {
+        color:black;
       }
-      span.sequence.dbor-string span.firstinsequence {
+      span.sequence.dbor-bytestring span.firstinsequence,
+      span.sequence.dbor-utf8string span.firstinsequence {
         color: green;
       }
       span.sequence.dbor-sequence span.firstinsequence {
@@ -100,10 +105,11 @@ Requires browser supports of:
     <!-- avoid import (not usable with local files due to CORS restrictions e.g. in Firefox 68) -->
     <script defer type="text/javascript" src="./src/dbor-encode.js"></script>  <!-- namespace 'dbor' -->
     <script defer type="text/javascript" src="./src/textobj-parse.js"></script> <!-- namespace 'textobj' -->
+    <script defer type="text/javascript" src="./src/textobjdbor-encode.js"></script> <!-- namespace 'textobjdbor' -->
   </head>
 
   <body onload="initalize()">
-    <div id="div-representation" class="invalid">
+    <div id="div-representation">
       <div class="textareacontainer">
         Objects to encode<span class="ifvalid"> (<a id="a-input-url">as URL</a>)</span>:
         <!-- note: placeholder is not supported by HTML 4.01 -->
@@ -113,11 +119,6 @@ Requires browser supports of:
                   style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre"/></textarea>
       </div>
 
-      <!--
-        TODO use onload on span-encoding-error to avoid blinking when loaded
-        https://stackoverflow.com/questions/28573225/intercept-and-modify-dom-before-page-is-displayed-to-user
-        TODO test effect on error in loaded scripts.
-      -->
       <p></p>
       <table class="alignonly">
         <tr>
@@ -159,193 +160,70 @@ Requires browser supports of:
 
       // --- relies on style/CSS but not specific DOM elements: ---
 
-      function outputMarkupFromInputRangesWithEncodedObjects (inputRangesWithEncodedObjects, functionForLink = null) {
-        let outputMarkup = '';
+      function createBytesElementFromInputRangesWithDborValues (inputRangesWithDborValues, functionForLink = null) {
+        const spanElement = document.createElement('span');
 
-        if (inputRangesWithEncodedObjects) {
-          let outputMarkups = [];
-          const byteSeparator = ' ';
+        if (!inputRangesWithDborValues)
+          return spanElement;
 
-          for (let r of inputRangesWithEncodedObjects) {
-            const [bytes, dborClass] = r.object;
-            const hexBytes = bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase());
+        const byteSeparator = ' ';
+        let isFirstValue = true;
 
-            if (hexBytes.length > 0) {
-              const firstElement = document.createElement('span');
-              firstElement.classList.add('firstinsequence');
-              firstElement.textContent = hexBytes[0];
+        for (let r of inputRangesWithDborValues) {
+          const [bytes, dborClass] = r.object;
+          const hexBytes = bytes.map(b => b.toString(16).padStart(2, '0').toUpperCase());
 
-              const linkElement = document.createElement('a');
-              linkElement.classList.add('withinheritedcolor');
-              linkElement.classList.add('underlinedonhover');
-              if (functionForLink && functionForLink.match(/^[A-Za-z_][A-Za-z_0-9]*$/))
-                linkElement.href = `javascript:${functionForLink}(${r.index}, ${r.length})`;
-              linkElement.appendChild(firstElement);
+          if (hexBytes.length > 0) {
+            if (!isFirstValue)
+              spanElement.append(document.createTextNode(byteSeparator));
 
-              const sequenceElement = document.createElement('span');
-              sequenceElement.classList.add('sequence');
-              sequenceElement.classList.add('underlinedonhover');
-              if (dborClass.match(/^[A-Za-z][A-Za-z0-9]*$/))
-                sequenceElement.classList.add(`dbor-${dborClass.toLowerCase()}`);
-              sequenceElement.appendChild(linkElement);
-              if (hexBytes.length > 1)
-                sequenceElement.appendChild(document.createTextNode(byteSeparator + hexBytes.slice(1).join(byteSeparator)))
+            const firstElement = document.createElement('span');
+            firstElement.classList.add('firstinsequence');
+            firstElement.textContent = hexBytes[0];
 
-              const outputMarkup = sequenceElement.outerHTML;
-              outputMarkups.push(outputMarkup);
-            }
+            const linkElement = document.createElement('a');
+            linkElement.classList.add('withinheritedcolor');
+            linkElement.classList.add('underlinedonhover');
+            if (functionForLink && functionForLink.match(/^[A-Za-z_][A-Za-z_0-9]*$/))
+              linkElement.href = `javascript:${functionForLink}(${r.index}, ${r.length})`;
+            linkElement.appendChild(firstElement);
+
+            const sequenceElement = document.createElement('span');
+            sequenceElement.classList.add('sequence');
+            sequenceElement.classList.add('underlinedonhover');
+            if (dborClass.match(/^[A-Za-z][A-Za-z0-9]*$/))
+              sequenceElement.classList.add(`dbor-${dborClass.toLowerCase()}`);
+            sequenceElement.appendChild(linkElement);
+            if (hexBytes.length > 1)
+              sequenceElement.appendChild(document.createTextNode(byteSeparator + hexBytes.slice(1).join(byteSeparator)))
+
+            spanElement.append(sequenceElement);
+            isFirstValue = false;
           }
-          outputMarkup = outputMarkups.join(byteSeparator);
         }
 
-        return outputMarkup;
+        return spanElement;
       }
 
 
-      // TODO move to file textobjtodbor-encode.js
-      function encodeInputRangeWithObject (inputRangeWithObject /* textobj.InputRange(..., textobj.Object(...)) */) {
-        const object = inputRangeWithObject.object;
-        let inputRangesWithEncodedObjects = [];  // [textobj.InputRange(), ...]
-        let totalSize = 0n;  // size of encoded values in inputRangesWithEncodedObjects
-
-        try {
-          let encoder = new dbor.Encoder();
-          let dborClass = null;  // will correspond to CSS class
-
-          if (object instanceof textobj.IntegerWithExpFactor) {
-            const number = object;
-            dborClass = 'Number';
-            if (number.mant === 0n && number.isNeg) {
-              encoder.appendMinusZero();
-              dborClass = 'Numberlike';
-            } else if (!number.base) {
-              encoder.appendInteger(number.mant);
-            } else if (number.base === 10n) {
-              if (number.exp != 0n)
-                encoder.appendDecimalRational(number.mant, number.exp)
-                // TODO improve error encoder messages
-              else
-                encoder.appendInteger(number.mant)
-            } else {
-              encoder.appendBinaryRational(number.mant, number.exp);
-            }
-          } else if (object instanceof textobj.SpecialLiteral) {
-            switch (object.literal) {
-              case 'None': {
-                dborClass = 'None';
-                encoder.appendNone();
-                break;
-              }
-              case 'Inf': {  // TODO rename to Infinity
-                dborClass = 'Numberlike';
-                encoder.appendInfinity();
-                break;
-              }
-              case '-Inf': {  // TODO rename to MinusInfinity
-                dborClass = 'Numberlike';
-                encoder.appendMinusInfinity();
-                break;
-              }
-            }
-          } else if (object instanceof String) {
-            dborClass = 'String';
-            encoder.appendUtf8String(object);
-          } else if (object instanceof Uint8Array) {
-            dborClass = 'String';
-            encoder.appendByteString(object);
-          } else if (object instanceof textobj.Sequence) {
-            dborClass = 'Sequence';
-            for (let o of object.parsedObjects) {
-              const [size, eos] = encodeInputRangeWithObject(o);
-              totalSize += size;
-              inputRangesWithEncodedObjects = inputRangesWithEncodedObjects.concat(eos);
-            }
-            encoder.appendSequenceHeader(totalSize);
-          } else if (object instanceof textobj.Dictionary) {
-            dborClass = 'Dictionary';
-
-            let encodedPairs = [];
-              // [[InputRange(), [InputRange(), ...]], ...]; r.object is [dborClass, bytes]
-              // for all InputRange instances r where bytes is an Uin8Array
-
-            for (let [k, v] of object.parsedObjectPairs) {
-              const [ksize, keos] = encodeInputRangeWithObject(k);
-              if (keos.length != 1 || k.object instanceof textobj.Container
-                  || (k.object instanceof textobj.SpecialLiteral && k.object.literal == 'None'))
-                throw new textobj.InputError('dictionary key must be elementary (no container or None)', k.index);  // TODO test
-              const [vsize, veos] = encodeInputRangeWithObject(v);
-              encodedPairs.push([keos[0], veos]);
-              totalSize += ksize;
-              totalSize += vsize;
-            }
-
-            // sort by key (as byte sequence)
-            encodedPairs.sort((a, b) => dbor.compareByteSequences(a[0].object[0], b[0].object[0]));
-            let lastKeoBytes = null;
-            for (let [keo, veos] of encodedPairs) {
-              if (lastKeoBytes && dbor.compareByteSequences(lastKeoBytes, keo.object[0]) == 0)
-                throw new textobj.InputError('duplicate dictionary key', keo.index);  // TODO test
-              inputRangesWithEncodedObjects.push(keo);
-              inputRangesWithEncodedObjects = inputRangesWithEncodedObjects.concat(veos);
-              lastKeoBytes = keo.object[0];
-            }
-
-            encoder.appendDictionaryHeader(totalSize);
-          }
-
-          if (!dborClass)
-            throw new TypeError('unsupported type');
-
-          totalSize += BigInt(encoder.bytes.length);
-          let eos = new textobj.InputRange(
-            inputRangeWithObject.index, inputRangeWithObject.length,
-            [encoder.bytes, dborClass]);
-          inputRangesWithEncodedObjects.unshift(eos);
-        } catch (error) {
-          if (error instanceof textobj.InputError)
-            throw error;
-          throw new textobj.InputError(error.message, inputRangeWithObject.index);
-        }
-
-        return [totalSize, inputRangesWithEncodedObjects];
-      }
-
-
-      // TODO move to file textobjtodbor-encode.js
-      function encodeInputText (input) {
-        let inputRangesWithObjects = new textobj.Parser(input).parse();
-        let inputRangesWithEncodedObjects = [];
-        for (let inputRangeWithObject of inputRangesWithObjects) {
-          const [totalSize, os] = encodeInputRangeWithObject(inputRangeWithObject);
-          inputRangesWithEncodedObjects = inputRangesWithEncodedObjects.concat(os);
-        }
-        return inputRangesWithEncodedObjects;
-      }
-
-
-      function inputRangeMarkupFromInputError(error /* textobj.InputError */,
-                                              lineIndex, columnIndex, functionForLink = null)
-      {
+      function createInputLineLinkElement(error /* textobj.InputError */, lineIndex, columnIndex, functionForLink = null) {
         const linkElement = document.createElement('a');
         linkElement.classList.add('withinheritedcolor');
         linkElement.classList.add('underlined');
-        if (functionForLink && functionForLink.match(/^[A-Za-z_][A-Za-z_0-9]*$/))
-          linkElement.href = `javascript:${functionForLink}(${error.index})`;
         linkElement.textContent = `line ${lineIndex + 1}:${columnIndex + 1}`;
 
-        const linenoElement = document.createElement('span');
-        linenoElement.classList.add('lineno');
-        linenoElement.appendChild(linkElement);
+        if (functionForLink && functionForLink.match(/^[A-Za-z_][A-Za-z_0-9]*$/))
+          linkElement.href = `javascript:${functionForLink}(${error.index})`;
 
-        return linenoElement.outerHTML;
+        return linkElement;
       }
 
 
       // --- relies on specific DOM elements but not style/CSS: ---
 
 
-      function setEncodingState (isComplete = false, inputRangesWithEncodedObjects = null,
-                                 input = null, errorMarkup = null)
+      function setEncodingState (isComplete = false, inputRangesWithDborValues = null,
+                                 input = null, errorSpanElement = null /* null or <span/>-element */)
       {
         const representationElement = document.getElementById('div-representation');
         const outputElement = document.getElementById('div-dborbytes');
@@ -354,12 +232,15 @@ Requires browser supports of:
         const inputUrlElement = document.getElementById('a-input-url');
         inputUrlElement.href = input ? `?q=${encodeURIComponent(input)}` : '';
 
-        // TODO replace markup by element
-        outputElement.innerHTML = outputMarkupFromInputRangesWithEncodedObjects(inputRangesWithEncodedObjects, 'selectInInput')
-        representationElement.classList.toggle('invalid', errorMarkup);
-        representationElement.classList.toggle('valid', !errorMarkup && inputRangesWithEncodedObjects);
-        // TODO replace markup by element
-        stateElement.innerHTML = errorMarkup || '';
+        outputElement.innerHTML = '';
+        outputElement.appendChild(createBytesElementFromInputRangesWithDborValues(inputRangesWithDborValues, 'selectInInput'));
+        representationElement.classList.toggle('invalid', errorSpanElement);
+        representationElement.classList.toggle('valid', !errorSpanElement && inputRangesWithDborValues);
+
+        stateElement.innerHTML = '';
+        if (errorSpanElement)
+          stateElement.appendChild(errorSpanElement);
+
         encodeButtonElement.disabled = isComplete;
       }
 
@@ -380,17 +261,22 @@ Requires browser supports of:
         const input = inputElement.value || '';
 
         try {
-          setEncodingState(true, encodeInputText(input), input);
+          setEncodingState(true, textobjdbor.encode(input), input);
         } catch (error) {
-          const node = document.createElement('span');
-          node.textContent = error.message;
-          let errorMarkup = node.innerHTML;
+          const spanElement = document.createElement('span');
+          spanElement.textContent = error.message;
+
           if (error instanceof textobj.InputError) {
             const [lineIndex, columnIndex] = textobj.makeIndexRelativeToLine(error.index, input);
-            errorMarkup = `${inputRangeMarkupFromInputError(error, lineIndex, columnIndex, 'selectInInput')}: ${errorMarkup}`;
+            const inputLineLinkElement = createInputLineLinkElement(error, lineIndex, columnIndex, 'selectInInput');
+            spanElement.prepend(document.createTextNode(': '));
+            spanElement.prepend(inputLineLinkElement);
+
             selectInInput(error.index);  // set cursor immediately before first invalid character
           }
-          setEncodingState(true, null, null, `\u{26A0} ${errorMarkup}`);
+
+          spanElement.prepend(document.createTextNode('\u{26A0} '));
+          setEncodingState(true, null, null, spanElement);
         }
       }
 
@@ -407,6 +293,8 @@ Requires browser supports of:
 
       function initalize () {
         BigInt(0);  // introduced with ECMAScript 2020
+        if (!(dbor.loaded && textobj.loaded && textobjdbor.loaded))
+          return;
 
         const inputElement = document.getElementById('textarea-input');
         inputElement.oninput = event => { setEncodingState() };  // mark input as changed

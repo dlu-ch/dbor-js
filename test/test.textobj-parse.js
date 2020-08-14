@@ -645,21 +645,21 @@ describe('Parser', function () {
       it('Inf', function () {
         let p = new textobj.Parser('Inf ');
         let o = p.consumeSpecialLiteral();
-        assert.equal(o.literal, 'Inf');
+        assert.equal(o.literal, 'Infinity');
         assert.equal(p.index, 3);
       });
 
       it('+Inf', function () {
         let p = new textobj.Parser('+Inf');
         let o = p.consumeSpecialLiteral();
-        assert.equal(o.literal, 'Inf');
+        assert.equal(o.literal, 'Infinity');
         assert.equal(p.index, 4);
       });
 
       it('-Inf', function () {
         let p = new textobj.Parser('-Inf,');
         let o = p.consumeSpecialLiteral();
-        assert.equal(o.literal, '-Inf');
+        assert.equal(o.literal, 'MinusInfinity');
         assert.equal(p.index, 4);
       });
 
@@ -696,36 +696,36 @@ describe('Parser', function () {
 
   });
 
-  describe('consumeQuotedString()', function () {
+  describe('consumeUnicodeString()', function () {
 
     describe('valid', function () {
       it('empty', function () {
         let p = new textobj.Parser('""');
-        let s = p.consumeQuotedString();
-        assert.instanceOf(s, String);
-        assert.equal(s, '');
+        let s = p.consumeUnicodeString();
+        assert.instanceOf(s, textobj.UnicodeString);
+        assert.equal(s.value, '');
         assert.equal(p.index, 2);
       });
 
       it('non-reserved ASCII only', function () {
         let p = new textobj.Parser('"a bc"');
-        let s = p.consumeQuotedString();
-        assert.equal(s, 'a bc');
-        assert.equal(p.index, 2 + s.length);
+        let s = p.consumeUnicodeString();
+        assert.equal(s.value, 'a bc');
+        assert.equal(p.index, 2 + s.value.length);
       });
 
       it('valid unicode and escaped braces', function () {
         const input = '"a{0}\\{{b}}\u{10FFFF}c"';
         let p = new textobj.Parser(input);
-        let s = p.consumeQuotedString();
-        assert.equal(s, 'a\0\\{b}\u{10FFFF}c'); // 8 codepoints, 9 UTF-16 code units
+        let s = p.consumeUnicodeString();
+        assert.equal(s.value, 'a\0\\{b}\u{10FFFF}c'); // 8 codepoints, 9 UTF-16 code units
         assert.equal(p.index, input.length);
       });
 
       it('code point in braces', function () {
         let p = new textobj.Parser('"a{16#10FFFF}b"');
-        let s = p.consumeQuotedString();
-        assert.equal(s, 'a\u{10FFFF}b'); // 3 codepoints, 4 UTF-16 code units
+        let s = p.consumeUnicodeString();
+        assert.equal(s.value, 'a\u{10FFFF}b'); // 3 codepoints, 4 UTF-16 code units
         assert.equal(p.index, 15);
       });
 
@@ -737,7 +737,7 @@ describe('Parser', function () {
         let p = new textobj.Parser('\n "');
         p.consumeOptionalWhitespace();
         try {
-            p.consumeQuotedString()
+            p.consumeUnicodeString()
         } catch (error) {
             assert.instanceOf(error, textobj.InputError);
             assert.equal(error.message, "missing '\"'");
@@ -750,7 +750,7 @@ describe('Parser', function () {
         let p = new textobj.Parser('\n "}"');
         p.consumeOptionalWhitespace();
         try {
-            p.consumeQuotedString()
+            p.consumeUnicodeString()
         } catch (error) {
             assert.instanceOf(error, textobj.InputError);
             assert.equal(error.message, "missing '}'");
@@ -763,7 +763,7 @@ describe('Parser', function () {
         let p = new textobj.Parser('\n "{"');
         p.consumeOptionalWhitespace();
         try {
-            p.consumeQuotedString()
+            p.consumeUnicodeString()
         } catch (error) {
             assert.instanceOf(error, textobj.InputError);
             assert.equal(error.message, "missing '{' or code point as integer number");
@@ -776,7 +776,7 @@ describe('Parser', function () {
         let p = new textobj.Parser('\n "{1.23}"');
         p.consumeOptionalWhitespace();
         try {
-            p.consumeQuotedString()
+            p.consumeUnicodeString()
         } catch (error) {
             assert.instanceOf(error, textobj.InputError);
             assert.equal(error.message, "invalid in integer number: '.'");
@@ -789,7 +789,7 @@ describe('Parser', function () {
         let p = new textobj.Parser('\n "{16#D800}"');
         p.consumeOptionalWhitespace();
         try {
-            p.consumeQuotedString()
+            p.consumeUnicodeString()
         } catch (error) {
             assert.instanceOf(error, textobj.InputError);
             assert.equal(error.message, "number invalid as Unicode code point");
@@ -802,7 +802,7 @@ describe('Parser', function () {
         let p = new textobj.Parser('\n "{-42}"');
         p.consumeOptionalWhitespace();
         try {
-            p.consumeQuotedString()
+            p.consumeUnicodeString()
         } catch (error) {
             assert.instanceOf(error, textobj.InputError);
             assert.equal(error.message, "number invalid as Unicode code point");
@@ -815,7 +815,7 @@ describe('Parser', function () {
         let p = new textobj.Parser('\n "a\n"');
         p.consumeOptionalWhitespace();
         try {
-            p.consumeQuotedString()
+            p.consumeUnicodeString()
         } catch (error) {
             assert.instanceOf(error, textobj.InputError);
             assert.equal(error.message, "invalid raw control character - use '{16#A}' instead");
@@ -835,8 +835,8 @@ describe('Parser', function () {
       it('empty', function () {
         let p = new textobj.Parser('<>');
         let s = p.consumeByteString();
-        assert.instanceOf(s, Uint8Array);
-        assert.deepEqual(s, new Uint8Array());
+        assert.instanceOf(s, textobj.ByteString);
+        assert.deepEqual(s.value, new Uint8Array());
         assert.equal(p.index, 2);
       });
 
@@ -844,8 +844,7 @@ describe('Parser', function () {
         const input = '<\n  2#1111_0101,0 \0, \t 16#FF >';
         let p = new textobj.Parser(input);
         let s = p.consumeByteString();
-        assert.instanceOf(s, Uint8Array);
-        assert.deepEqual(s, new Uint8Array([0xF5, 0x00, 0xFF]));
+        assert.deepEqual(s.value, new Uint8Array([0xF5, 0x00, 0xFF]));
         assert.equal(p.index, input.length);
       });
     });
@@ -951,8 +950,8 @@ describe('Parser', function () {
         assert.equal(po.length, 4);
         assert.deepEqual(po[0], new textobj.InputRange(2, 1, new textobj.IntegerWithExpFactor(1n, null, 0n, false)));
         assert.deepEqual(po[1], new textobj.InputRange(5, 4, new textobj.SpecialLiteral('None')));
-        assert.deepEqual(po[2], new textobj.InputRange(13, 3, new Uint8Array([0])));
-        assert.deepEqual(po[3], new textobj.InputRange(17, 5, new String("abc")));
+        assert.deepEqual(po[2], new textobj.InputRange(13, 3, new textobj.ByteString([0])));
+        assert.deepEqual(po[3], new textobj.InputRange(17, 5, new textobj.UnicodeString('abc')));
 
         assert.equal(p.index, 25);
       });
@@ -964,17 +963,17 @@ describe('Parser', function () {
         assert.instanceOf(s, textobj.Sequence);
 
         assert.equal(s.parsedObjects.length, 2);
-        assert.deepEqual(s.parsedObjects[0].object, new String("1"));
+        assert.deepEqual(s.parsedObjects[0].object, new textobj.UnicodeString('1'));
         s = s.parsedObjects[1].object;
         assert.instanceOf(s, textobj.Sequence);
 
         assert.equal(s.parsedObjects.length, 2);
-        assert.deepEqual(s.parsedObjects[0].object, new String("2"));
+        assert.deepEqual(s.parsedObjects[0].object, new textobj.UnicodeString('2'));
         s = s.parsedObjects[1].object;
         assert.instanceOf(s, textobj.Sequence);
 
         assert.equal(s.parsedObjects.length, 2);
-        assert.deepEqual(s.parsedObjects[1].object, new String("3"));
+        assert.deepEqual(s.parsedObjects[1].object, new textobj.UnicodeString('3'));
         s = s.parsedObjects[0].object;
         assert.instanceOf(s, textobj.Sequence);
         assert.deepEqual(s.parsedObjects, []);
@@ -1053,7 +1052,7 @@ describe('Parser', function () {
       ]);
       assert.deepEqual(po[1], [
         new textobj.InputRange(12, 1, new textobj.IntegerWithExpFactor(1n, null, 0n, false)),
-        new textobj.InputRange(14, 3, new Uint8Array([0]))
+        new textobj.InputRange(14, 3, new textobj.ByteString([0]))
       ]);
 
       assert.equal(p.index, 20);
