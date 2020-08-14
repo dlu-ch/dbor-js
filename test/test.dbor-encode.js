@@ -540,4 +540,26 @@ describe('Encoder', function () {
     });
   });
 
+
+  describe('Sequence', function () {
+    it('typical', function () {
+      let e = new dbor.Encoder();
+      e.appendSequenceHeader(0);
+      assert.deepEqual(e.bytes, [0x80]);
+
+      e = new dbor.Encoder();
+      e.appendSequenceHeader(0x17);
+      assert.deepEqual(e.bytes, [0x97]);
+
+      e = new dbor.Encoder();
+      e.appendSequenceHeader(0xFFFFFFFF);
+      assert.deepEqual(e.bytes, [0x9B, 0xE7, 0xFE, 0xFE, 0xFE]);
+    });
+
+    it('negative size', function () {
+      let e = new dbor.Encoder();
+      assert.throws(function () { e.appendSequenceHeader(-1); }, RangeError);
+    });
+  });
+
 });

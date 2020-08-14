@@ -929,4 +929,100 @@ describe('Parser', function () {
 
   });
 
+  describe('consumeSequence()', function () {
+
+    describe('valid', function () {
+      it('empty', function () {
+        let p = new textobj.Parser('[]');
+        let s = p.consumeSequence();
+        assert.instanceOf(s, textobj.Sequence);
+        let po = s.parsedObjects;
+        assert.deepEqual(po, []);
+        assert.equal(p.index, 2);
+      });
+
+      it('non-empty, flat', function () {
+        let p = new textobj.Parser('[ 1, None  , <0>,"abc"   ]');
+        let s = p.consumeSequence();
+
+        assert.instanceOf(s, textobj.Sequence);
+        let po = s.parsedObjects;
+
+        assert.equal(po.length, 4);
+        assert.deepEqual(po[0], new textobj.InputRange(2, 1, new textobj.IntegerWithExpFactor(1n, null, 0n, false)));
+        assert.deepEqual(po[1], new textobj.InputRange(5, 4, new textobj.SpecialLiteral('None')));
+        assert.deepEqual(po[2], new textobj.InputRange(13, 3, new Uint8Array([0])));
+        assert.deepEqual(po[3], new textobj.InputRange(17, 5, new String("abc")));
+
+        assert.equal(p.index, 26);
+      });
+
+      it('non-empty, nested', function () {
+        let p = new textobj.Parser('["1", ["2", [[], "3"]]]]');
+        let s = p.consumeSequence();
+
+        assert.instanceOf(s, textobj.Sequence);
+
+        assert.equal(s.parsedObjects.length, 2);
+        assert.deepEqual(s.parsedObjects[0].object, new String("1"));
+        s = s.parsedObjects[1].object;
+        assert.instanceOf(s, textobj.Sequence);
+
+        assert.equal(s.parsedObjects.length, 2);
+        assert.deepEqual(s.parsedObjects[0].object, new String("2"));
+        s = s.parsedObjects[1].object;
+        assert.instanceOf(s, textobj.Sequence);
+
+        assert.equal(s.parsedObjects.length, 2);
+        assert.deepEqual(s.parsedObjects[1].object, new String("3"));
+        s = s.parsedObjects[0].object;
+        assert.instanceOf(s, textobj.Sequence);
+        assert.deepEqual(s.parsedObjects, []);
+
+        assert.equal(p.index, 23);
+      });
+
+    });
+
+    describe('invalid', function () {
+      it('missing ]', function () {
+        let p = new textobj.Parser('\n [123');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeSequence()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing ']'");
+            assert.equal(error.index, 2 + 4);
+        }
+        assert.equal(p.index, 2 + 4);
+      });
+
+      it('missing object', function () {
+        let p = new textobj.Parser('\n [\n');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeSequence()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'missing object');
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+
+        p = new textobj.Parser('\n [123 , ]');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeSequence()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'missing object');
+            assert.equal(error.index, 2 + 7);
+        }
+        assert.equal(p.index, 2 + 7);
+      });
+    });
+
+  });
+
 });

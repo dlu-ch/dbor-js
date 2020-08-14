@@ -75,6 +75,9 @@ Requires browser supports of:
       span.sequence.dbor-string span.firstinsequence {
         color: green;
       }
+      span.sequence.dbor-sequence span.firstinsequence {
+        color: blue;
+      }
 
       .underlinedonhover {
         text-decoration: none;
@@ -107,6 +110,11 @@ Requires browser supports of:
                   style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre"/></textarea>
       </div>
 
+      <!--
+        TODO use onload on span-encoding-error to avoid blinking when loaded
+        https://stackoverflow.com/questions/28573225/intercept-and-modify-dom-before-page-is-displayed-to-user
+        TODO test effect on error in loaded scripts.
+      -->
       <p></p>
       <table class="alignonly">
         <tr>
@@ -117,7 +125,7 @@ Requires browser supports of:
       <p></p>
 
       <div class="textareacontainer">
-        Corresponding <a href="https://github.com/dlu-ch/dbor-spec/">DBOR</a> encoded byte sequence:
+        Corresponding <a href="https://github.com/dlu-ch/dbor-spec/">DBOR</a>-encoded byte sequence:
         <div id="div-dborbytes" class="noninput"
              style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex"></div>
       </div>
@@ -127,13 +135,14 @@ Requires browser supports of:
         Examples:
         <ul>
           <li><a href="?q=None">None</a></li>
-          <li>Numbers:
+          <li>Numbers and number-likes:
               <a href="?q=12_345_000%2C%0A-16%23FFFF_FFFF%2C%0A2%2311001111%2C%0A36%23LETSFETZ">integers</a>,
               <a href="?q=-0.75%2C%0A1.25*10%5E9">decimal rationals</a>,
-              <a href="?q=0.25*2%5E-1%2C%0A2%5E-16%233FE%2C%0A-2%231.1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_*_2%5E1024">binary rationals</a></li>
-          <li>Numberlikes: <a href="?q=-0%2C%0AInf%2C%0A-Inf">-0 and &#xB1;&#x221E;</a></li>
+              <a href="?q=0.25*2%5E-1%2C%0A2%5E-16%233FE%2C%0A-2%231.1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_*_2%5E1024">binary rationals</a>,
+              <a href="?q=-0%2C%0AInf%2C%0A-Inf">-0 and &#xB1;&#x221E;</a></li>
           <li>Strings: <a href="?q=%3C%3E%2C%0A%3C2%231111_0001%2C%200%2C%2016%23FF%3E">bytes</a>,
               <a href="?q=%22%C2%A1Ol%C3%A9!%22%2C%0A%22braces%20%7B%7B%2C%20%7D%7D%20are%20escaped%20by%20doubling%22%2C%0A%22character%20by%20code%20point%3A%20%7B16%2310_FFFF%7D%22%2C%0A%22double%20quote%3A%20%7B34%7D%22">UTF-8 characters</a></li>
+          <li>Containers: <a href="?q=%5B1%2C%20%22123%22%2C%20%5B%3C42%2C%2099%3E%2C%20-2%231001%5D%5D">sequences</a></li>
         </ul>
       </par>
 
@@ -189,71 +198,91 @@ Requires browser supports of:
       }
 
 
+      // TODO move to file textobjtodbor-encode.js
+      function encodeInputRangeWithObject (inputRangeWithObject /* textobj.InputRange(..., textobj.Object(...)) */) {
+        const object = inputRangeWithObject.object;
+        let inputRangesWithEncodedObjects = [];
+        let totalSize = 0n;
+
+        try {
+          let encoder = new dbor.Encoder();
+          let dborClass = null;  // will correspond to CSS class
+
+          if (object instanceof textobj.IntegerWithExpFactor) {
+            const number = object;
+            dborClass = 'Number';
+            if (number.mant === 0n && number.isNeg) {
+              encoder.appendMinusZero();
+              dborClass = 'Numberlike';
+            } else if (!number.base) {
+              encoder.appendInteger(number.mant);
+            } else if (number.base === 10n) {
+              if (number.exp != 0n)
+                encoder.appendDecimalRational(number.mant, number.exp)
+                // TODO improve error encoder messages
+              else
+                encoder.appendInteger(number.mant)
+            } else {
+              encoder.appendBinaryRational(number.mant, number.exp);
+            }
+          } else if (object instanceof textobj.SpecialLiteral) {
+            switch (object.literal) {
+              case 'None': {
+                dborClass = 'None';
+                encoder.appendNone();
+                break;
+              }
+              case 'Inf': {  // TODO rename to Infinity
+                dborClass = 'Numberlike';
+                encoder.appendInfinity();
+                break;
+              }
+              case '-Inf': {  // TODO rename to MinusInfinity
+                dborClass = 'Numberlike';
+                encoder.appendMinusInfinity();
+                break;
+              }
+            }
+          } else if (object instanceof String) {
+            dborClass = 'String';
+            encoder.appendUtf8String(object);
+          } else if (object instanceof Uint8Array) {
+            dborClass = 'String';
+            encoder.appendByteString(object);
+          } else if (object instanceof textobj.Sequence) {
+            dborClass = 'Sequence';
+            for (let o of object.parsedObjects) {
+              const [size, eos] = encodeInputRangeWithObject(o);
+              totalSize += size;
+              inputRangesWithEncodedObjects = inputRangesWithEncodedObjects.concat(eos);
+            }
+            encoder.appendSequenceHeader(totalSize);
+          }
+
+          if (!dborClass)
+            throw new TypeError('unsupported type');
+
+          totalSize += BigInt(encoder.bytes.length);
+          let eos = new textobj.InputRange(
+            inputRangeWithObject.index, inputRangeWithObject.length,
+            [dborClass, encoder.bytes]);
+          inputRangesWithEncodedObjects.unshift(eos);
+        } catch (error) {
+          throw new textobj.InputError(error.message, inputRangeWithObject.index);
+        }
+
+        return [totalSize, inputRangesWithEncodedObjects];
+      }
+
+
+      // TODO move to file textobjtodbor-encode.js
       function encodeInputText (input) {
         let inputRangesWithObjects = new textobj.Parser(input).parse();
         let inputRangesWithEncodedObjects = [];
-
         for (let inputRangeWithObject of inputRangesWithObjects) {
-          const object = inputRangeWithObject.object;
-          try {
-            let encoder = new dbor.Encoder();
-            let dborClass = null;  // will correspond to CSS class
-
-            if (object instanceof textobj.IntegerWithExpFactor) {
-              const number = object;
-              dborClass = 'Number';
-              if (number.mant === 0n && number.isNeg) {
-                encoder.appendMinusZero();
-                dborClass = 'Numberlike';
-              } else if (!number.base) {
-                encoder.appendInteger(number.mant);
-              } else if (number.base === 10n) {
-                if (number.exp != 0n)
-                  encoder.appendDecimalRational(number.mant, number.exp)
-                  // TODO improve error encoder messages
-                else
-                  encoder.appendInteger(number.mant)
-              } else {
-                encoder.appendBinaryRational(number.mant, number.exp);
-              }
-            } else if (object instanceof textobj.SpecialLiteral) {
-              switch (object.literal) {
-                case 'None': {
-                  dborClass = 'None';
-                  encoder.appendNone();
-                  break;
-                }
-                case 'Inf': {
-                  dborClass = 'Numberlike';
-                  encoder.appendInfinity();
-                  break;
-                }
-                case '-Inf': {
-                  dborClass = 'Numberlike';
-                  encoder.appendMinusInfinity();
-                  break;
-                }
-              }
-            } else if (object instanceof String) {
-              dborClass = 'String';
-              encoder.appendUtf8String(object);
-            } else if (object instanceof Uint8Array) {
-              dborClass = 'String';
-              encoder.appendByteString(object);
-            }
-
-            if (!dborClass)
-              throw new TypeError('unsupported type');
-
-            inputRangesWithEncodedObjects.push(
-              new textobj.InputRange(
-                inputRangeWithObject.index, inputRangeWithObject.length,
-                [dborClass, encoder.bytes]));
-          } catch (error) {
-            throw new textobj.InputError(error.message, inputRangeWithObject.index);
-          }
+          const [totalSize, os] = encodeInputRangeWithObject(inputRangeWithObject);
+          inputRangesWithEncodedObjects = inputRangesWithEncodedObjects.concat(os);
         }
-
         return inputRangesWithEncodedObjects;
       }
 

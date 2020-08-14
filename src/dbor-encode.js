@@ -365,4 +365,11 @@ dbor.Encoder = class {
     return this;
   }
 
+  // Append the header of a SequenceValue, to be followed by exactly contentSize bytes.
+  // Throws RangeError if contentSize too large.
+  appendSequenceHeader (contentSize) {
+    this.bytes = this.bytes.concat(dbor.encodeIntegerToken(4, contentSize));
+    return this;
+  }
+
 };

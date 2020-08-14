@@ -37,9 +37,19 @@ textobj.IntegerWithExpFactor = class extends textobj.Object {
 textobj.SpecialLiteral = class extends textobj.Object {
   constructor(literal /* String */) {
     super();
-    this.literal = String(literal)
+    this.literal = String(literal);
   }
 };
+
+
+// e.g. 'None'
+textobj.Sequence = class extends textobj.Object {
+  constructor(parsedObjects /* ??? */) {
+    super();
+    this.parsedObjects = parsedObjects;
+  }
+};
+
 
 
 // Input from UTF-16 code unit 'index' to UTF-16 code unit
@@ -270,7 +280,7 @@ textobj.Parser = class {
   //   <decimal-digit> ::= "0" | ... | "9".
   //   <digit> ::= <decimal-digit> | "A" | ... | "Z".
 
-  consumeNumber () {  // -> textobj.IntegerWithExpFactor(mant, powerBase, exp, isNeg) where powerBase is 2 or 10 or null
+  consumeNumber () {  // -> textobj.IntegerWithExpFactor(mant, base, exp, isNeg) where base is 2 or 10 or null
     const startIndex = this.index;
 
     // parse
@@ -419,7 +429,7 @@ textobj.Parser = class {
     if (this.unparsed[0] != '"')
       throw new textobj.InputError('missing string', this.index);
 
-    this.advance(1);
+    this.advance();
     let stringValue = '';
 
     while (true) {
@@ -443,7 +453,7 @@ textobj.Parser = class {
 
         if (this.unparsed[0] == c) { // '{{' or '}}'
           stringValue += c;
-          this.advance(1);
+          this.advance();
         } else if (c == '{') {
           if (!this.unparsed.match(/^([+-])?[0-9]/))
             throw new textobj.InputError("missing '{' or code point as integer number", this.index);
@@ -453,7 +463,7 @@ textobj.Parser = class {
           this.advance(parsedlength);
           if (this.unparsed[0] != '}')
             throw new textobj.InputError("missing '}'", this.index);
-          this.advance(1);
+          this.advance();
           stringValue += String.fromCodePoint(Number(v));
         } else
           throw new textobj.InputError("missing '}'", this.index);
@@ -482,7 +492,7 @@ textobj.Parser = class {
     if (this.unparsed[0] != '<')
       throw new textobj.InputError('missing byte string', this.index);
 
-    this.advance(1);
+    this.advance();
     this.consumeOptionalWhitespace();
 
     let bytes = [];
@@ -502,47 +512,92 @@ textobj.Parser = class {
           break;
         if (this.unparsed[0] != ',')
           throw new textobj.InputError("missing ','", this.index);
-        this.advance(1);
+        this.advance();
         this.consumeOptionalWhitespace();
       }
     }
-    this.advance(1);
+    this.advance();
 
     return new Uint8Array(bytes);
   }
 
 
+  // Consume the longest prefix of the unparsed text that is a
+  // <sequence> (at least two characters) and return it as a textobj.Sequence.
+  //
+  // Syntax:
+  //
+  //   <sequence> ::= "[" [ <ws-sequence-element> { <optional-whitespace> "," <ws-sequence-element> } ] <optional-whitespace> "]".
+  //   <optional-whitespace> ::= { <whitespace-character> }.
+  //   <ws-sequence-element> ::= <optional-whitespace> <sequence-element>.
+  //   <sequence-element> ::= <number> | <special-literal> | <quoted-string> | <byte-string> | <sequence>.
+
+  consumeSequence () {  // -> textobj.Sequence([textobj.InputRange(..., textobj.Object(...)), ...])
+    if (this.unparsed[0] != '[')
+      throw new textobj.InputError('missing sequence', this.index);
+
+    this.advance();
+    this.consumeOptionalWhitespace();
+
+    let parsedObjects = [];
+
+    if (this.unparsed[0] != ']') {
+      while (true) {
+        parsedObjects.push(this.parseObject());
+        this.consumeOptionalWhitespace();
+        if (!this.unparsed)
+          throw new textobj.InputError("missing ']'", this.index);
+        if (this.unparsed[0] == ']')
+          break;
+        if (this.unparsed[0] != ',')
+          throw new textobj.InputError("missing ','", this.index);
+        this.advance();
+        this.consumeOptionalWhitespace();
+      }
+    }
+    this.advance();
+
+    return new textobj.Sequence(parsedObjects);
+  }
+
+
+  parseObject () {  // -> InputRange(...)
+    let object = null;
+
+    const startIndex = this.index;
+    if (this.unparsed.match(/^([+-])?[0-9]/)) {
+      object = this.consumeNumber();  // '1.23', -'16#BEEF', '2^-34', ...
+    } else if (this.unparsed.match(/^([+-])?[A-Za-z]/)) {
+      object = this.consumeSpecialLiteral();  // 'None', '-Inf', ...
+    } else if (this.unparsed.match(/^"/)) {
+      object = this.consumeQuotedString();  // "..."
+    } else if (this.unparsed.match(/^</)) {
+      object = this.consumeByteString();  // <...>
+    } else if (this.unparsed.match(/^\[/)) {
+      object = this.consumeSequence();  // [ ... ]
+    }
+
+    if (object == null)
+      throw new textobj.InputError('missing object', startIndex);
+
+    return new textobj.InputRange(startIndex, this.index - startIndex, object);
+  }
+
+
   // TODO test
 
-  parse () {  // [ InputRange(), ...]
+  parse () {  // -> [ InputRange(), ...]
     let objects = [];
 
     while (true) {
       this.consumeOptionalWhitespace();
-
-      const startIndex = this.index;
-      let object = null;
-      if (this.unparsed.match(/^([+-])?[0-9]/)) {
-        object = this.consumeNumber();  // '1.23', -'16#BEEF', '2^-34', ...
-      } else if (this.unparsed.match(/^([+-])?[A-Za-z]/)) {
-        object = this.consumeSpecialLiteral();  // 'None', '-Inf', ...
-      } else if (this.unparsed.match(/^"/)) {
-        object = this.consumeQuotedString();  // "..."
-      } else if (this.unparsed.match(/^</)) {
-        object = this.consumeByteString();  // <...>
-      }
-
-      if (object == null)
-        throw new textobj.InputError('missing object', startIndex);
-      objects.push(new textobj.InputRange(startIndex, this.index - startIndex, object));
-
+      objects.push(this.parseObject());
       this.consumeOptionalWhitespace();
       if (!this.unparsed)
         break;
 
       if (this.unparsed[0] != ',')
         throw new textobj.InputError("missing ','", this.index);
-
       this.advance();
     }
 
