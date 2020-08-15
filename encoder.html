@@ -62,29 +62,35 @@ Requires browser supports of:
       }
 
       /* elements representing DBOR encoded byte sequences */
-      span.sequence span.firstinsequence {
+      span.dbor-value span.firstinsequence {
         font-weight: bold;
       }
-      span.sequence.dbor-none span.firstinsequence {
+      span.dbor-value.dbor-none span.firstinsequence {
         color: red;
       }
-      span.sequence.dbor-integer span.firstinsequence,
-      span.sequence.dbor-binaryrational span.firstinsequence,
-      span.sequence.dbor-decimalrational span.firstinsequence,
-      span.sequence.dbor-minuszero span.firstinsequence,
-      span.sequence.dbor-infinity span.firstinsequence,
-      span.sequence.dbor-minusinfinity span.firstinsequence {
+      span.dbor-value.dbor-integer span.firstinsequence,
+      span.dbor-value.dbor-binaryrational span.firstinsequence,
+      span.dbor-value.dbor-decimalrational span.firstinsequence,
+      span.dbor-value.dbor-minuszero span.firstinsequence,
+      span.dbor-value.dbor-infinity span.firstinsequence,
+      span.dbor-value.dbor-minusinfinity span.firstinsequence {
         color:black;
       }
-      span.sequence.dbor-bytestring span.firstinsequence,
-      span.sequence.dbor-utf8string span.firstinsequence {
+      span.dbor-value.dbor-bytestring span.firstinsequence,
+      span.dbor-value.dbor-utf8string span.firstinsequence {
         color: green;
       }
-      span.sequence.dbor-sequence span.firstinsequence {
+      span.dbor-value.dbor-sequence span.firstinsequence {
         color: blue;
       }
-      span.sequence.dbor-dictionary span.firstinsequence {
+      span.dbor-value.dbor-dictionary span.firstinsequence {
         color: DarkMagenta;
+      }
+      span.dbor-value.dbor-allocator span.firstinsequence {
+        color: gray;
+      }
+      span.byte-sequence.dbor-fill {
+        color: gray;
       }
 
       .underlinedonhover {
@@ -147,12 +153,13 @@ Requires browser supports of:
           <li>Strings: <a href="?q=%3C%3E%2C%0A%3C2%231111_0001%2C%200%2C%2016%23FF%3E">bytes</a>,
               <a href="?q=%22%C2%A1Ol%C3%A9!%22%2C%0A%22braces%20%7B%7B%2C%20%7D%7D%20are%20escaped%20by%20doubling%22%2C%0A%22character%20by%20code%20point%3A%20%7B16%2310_FFFF%7D%22%2C%0A%22double%20quote%3A%20%7B34%7D%22">UTF-8 characters</a></li>
           <li>Containers: <a href="?q=%5B1%2C%20%22123%22%2C%20%5B%3C42%2C%2099%3E%2C%20-2%231001%5D%5D">sequences</a>,
-              <a href="?q=%7B3%3A%20%22a%22%2C%201%3A%20%22b%22%2C%20-2%3A%20%5B%5D%2C%202.0%3A%20None%7D%2C%0A%7B1%3A%20%7B2%3A%20%22x%22%2C%203%3A%20%7B4%3A%20%22y%22%7D%7D%7D">dictionaries</a></li>
+              <a href="?q=%7B3%3A%20%22a%22%2C%201%3A%20%22b%22%2C%20-2%3A%20%5B%5D%2C%202.0%3A%20None%7D%2C%0A%7B1%3A%20%7B2%3A%20%22x%22%2C%203%3A%20%7B4%3A%20%22y%22%7D%7D%7D">dictionaries</a>,
+              <a href="?q=(%5B1%2C%20%20%20%202%5D%20%20%20)%268%2C%0A(%5B1111%2C%202222%5D)%268">allocators</a></li>
         </ul>
       </par>
 
       Built with <a href="https://github.com/dlu-ch/dbor-js/">dbor-js</a>.
-      Encoding happens entirely in the browser; no part of the input data is sent to a server.
+      Encoding happens entirely in the browser; no part of the input data is sent to a server (except when set by URL query string).
     </div>
 
     <script type="text/javascript">
@@ -189,7 +196,7 @@ Requires browser supports of:
             linkElement.appendChild(firstElement);
 
             const sequenceElement = document.createElement('span');
-            sequenceElement.classList.add('sequence');
+            sequenceElement.classList.add(dborClass.match(/^[A-Z]/) ? 'dbor-value' : 'byte-sequence');
             sequenceElement.classList.add('underlinedonhover');
             if (dborClass.match(/^[A-Za-z][A-Za-z0-9]*$/))
               sequenceElement.classList.add(`dbor-${dborClass.toLowerCase()}`);

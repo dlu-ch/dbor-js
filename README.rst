@@ -1,7 +1,7 @@
 dbor-js
 =======
 
-dbor-js is a library implementing a DBOR encoder for ECMAScript 2020.
+dbor-js is a library implementing a DBOR encoder (conformance level 5) for ECMAScript 2020.
 
 DBOR: `<https::github.com/dlu-ch/dbor-spec>`_.
 

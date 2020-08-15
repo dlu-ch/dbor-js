@@ -611,4 +611,22 @@ describe('Encoder', function () {
     });
   });
 
+  describe('Allocator', function () {
+    it('typical', function () {
+      let e = new dbor.Encoder();
+      e.appendAllocatorHeader(0x42);
+      assert.deepEqual(e.bytes, [0xC0, 0x41]);
+
+      e = new dbor.Encoder();
+      e.appendAllocatorHeader(0xFFFFFFFF);
+      assert.deepEqual(e.bytes, [0xC3, 0xFE, 0xFE, 0xFE, 0xFE]);
+    });
+
+    it('non-positive size', function () {
+      let e = new dbor.Encoder();
+      assert.throws(function () { e.appendAllocatorHeader(0); }, RangeError);
+      assert.throws(function () { e.appendAllocatorHeader(-1); }, RangeError);
+    });
+  });
+
 });

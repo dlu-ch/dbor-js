@@ -135,6 +135,7 @@ dbor.encodePowerOfTenToken = function (value) {
       throw new RangeError('magnitude of exponent too large');
     throw error;
   }
+
   return [h | 0x10 | (data.length - 1)].concat(data);
 };
 
@@ -421,7 +422,7 @@ dbor.Encoder = class {
   }
 
   // Append the header of a SequenceValue, to be followed by exactly contentSize bytes.
-  // Throws RangeError if contentSize too large.
+  // Throws RangeError if contentSize negative or too large.
   appendSequenceHeader (contentSize) {
     this.bytes = this.bytes.concat(dbor.encodeIntegerToken(4, contentSize));
     return this;
@@ -429,9 +430,20 @@ dbor.Encoder = class {
 
 
   // Append the header of a DictionaryValue, to be followed by exactly contentSize bytes.
-  // Throws RangeError if contentSize too large.
+  // Throws RangeError if contentSize negative or too large.
   appendDictionaryHeader (contentSize) {
     this.bytes = this.bytes.concat(dbor.encodeIntegerToken(5, contentSize));
+    return this;
+  }
+
+
+  // Append the header of a AllocatorValue, to be followed by exactly contentSize bytes.
+  // Throws RangeError if contentSize non-positive or too large.
+  appendAllocatorHeader (contentSize) {
+    const data = dbor.encodeNaturalTokenData(contentSize);
+    const first = (6 << 5) | (data.length - 1);
+    this.bytes.push(first);
+    this.bytes = this.bytes.concat(data);
     return this;
   }
 

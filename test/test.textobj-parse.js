@@ -1024,7 +1024,6 @@ describe('Parser', function () {
 
   });
 
-
   describe('consumeDictionary()', function () {
 
     describe('valid', function () {
@@ -1058,58 +1057,141 @@ describe('Parser', function () {
       assert.equal(p.index, 20);
     });
 
+    describe('invalid', function () {
+      it('missing :', function () {
+        let p = new textobj.Parser('\n {123');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeDictionary()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing ':'");
+            assert.equal(error.index, 2 + 4);
+        }
+        assert.equal(p.index, 2 + 4);
+      });
+
+      it('missing }', function () {
+        let p = new textobj.Parser('\n {123:4');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeDictionary()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing '}'");
+            assert.equal(error.index, 2 + 6);
+        }
+        assert.equal(p.index, 2 + 6);
+      });
+
+      it('missing object', function () {
+        let p = new textobj.Parser('\n {\n');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeDictionary()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'missing object');
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+
+        p = new textobj.Parser('\n {123: 4, }');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeDictionary()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'missing object');
+            assert.equal(error.index, 2 + 9);
+        }
+        assert.equal(p.index, 2 + 9);
+      });
+    });
   });
 
-  describe('invalid', function () {
-    it('missing :', function () {
-      let p = new textobj.Parser('\n {123');
-      p.consumeOptionalWhitespace();
-      try {
-          p.consumeDictionary()
-      } catch (error) {
-          assert.instanceOf(error, textobj.InputError);
-          assert.equal(error.message, "missing ':'");
-          assert.equal(error.index, 2 + 4);
-      }
-      assert.equal(p.index, 2 + 4);
+  describe('consumeAllocator()', function () {
+
+    describe('valid', function () {
+      it('typical', function () {
+        let p = new textobj.Parser('( [1, 2, 3] )&45');
+        let a = p.consumeAllocator();
+        assert.instanceOf(a, textobj.Allocator);
+        let co = a.containedObject;
+        assert.instanceOf(co.object, textobj.Sequence);
+        assert.equal(a.maxContainedSize, 45);
+        assert.equal(a.sizeInputIndex, 14);
+        assert.equal(p.index, 16);
+      });
     });
 
-    it('missing }', function () {
-      let p = new textobj.Parser('\n {123:4');
-      p.consumeOptionalWhitespace();
-      try {
-          p.consumeDictionary()
-      } catch (error) {
-          assert.instanceOf(error, textobj.InputError);
-          assert.equal(error.message, "missing '}'");
-          assert.equal(error.index, 2 + 6);
-      }
-      assert.equal(p.index, 2 + 6);
+    describe('invalid', function () {
+
+      it('missing object', function () {
+        let p = new textobj.Parser('\n (\n');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeAllocator()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'missing object');
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+
+        p = new textobj.Parser('\n ()&1\n');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeAllocator()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'missing object');
+            assert.equal(error.index, 2 + 1);
+        }
+        assert.equal(p.index, 2 + 1);
+      });
+
+      it('missing )', function () {
+        let p = new textobj.Parser('\n (1, 2)&3');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeAllocator()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing ')'");
+            assert.equal(error.index, 2 + 2);
+        }
+        assert.equal(p.index, 2 + 2);
+      });
+
+      it('missing &', function () {
+        let p = new textobj.Parser('\n (1)2');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeAllocator()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, "missing '&'");
+            assert.equal(error.index, 2 + 3);
+        }
+        assert.equal(p.index, 2 + 3);
+      });
+
+      it('non-positive size', function () {
+        let p = new textobj.Parser('\n (1)&0');
+        p.consumeOptionalWhitespace();
+        try {
+            p.consumeAllocator()
+        } catch (error) {
+            assert.instanceOf(error, textobj.InputError);
+            assert.equal(error.message, 'invalid as maximum size');
+            assert.equal(error.index, 2 + 4);
+        }
+        assert.equal(p.index, 2 + 4);
+      });
+
     });
 
-    it('missing object', function () {
-      let p = new textobj.Parser('\n {\n');
-      p.consumeOptionalWhitespace();
-      try {
-          p.consumeDictionary()
-      } catch (error) {
-          assert.instanceOf(error, textobj.InputError);
-          assert.equal(error.message, 'missing object');
-          assert.equal(error.index, 2 + 2);
-      }
-      assert.equal(p.index, 2 + 2);
-
-      p = new textobj.Parser('\n {123: 4, }');
-      p.consumeOptionalWhitespace();
-      try {
-          p.consumeDictionary()
-      } catch (error) {
-          assert.instanceOf(error, textobj.InputError);
-          assert.equal(error.message, 'missing object');
-          assert.equal(error.index, 2 + 9);
-      }
-      assert.equal(p.index, 2 + 9);
-    });
   });
 
 });

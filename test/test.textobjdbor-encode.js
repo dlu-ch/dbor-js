@@ -14,8 +14,8 @@ describe('textobjdbor.encode()', function () {
   describe('valid', function () {
 
     it('all classes', function () {
-      let rs = textobjdbor.encode('None, 123, -0.1, 2^-3, -Inf, Inf, <0, 1>, "hoi", [], {}');
-      assert.deepEqual(rs.length, 10);
+      let rs = textobjdbor.encode('None, 123, -0.1, 2^-3, -Inf, Inf, <0, 1>, "hoi", [], {}, (1)&1');
+      assert.equal(rs.length, 12);
 
       let r = rs[0];
       assert.instanceOf(r, textobj.InputRange);
@@ -57,6 +57,13 @@ describe('textobjdbor.encode()', function () {
       r = rs[9];
       assert.deepEqual([r.index, r.length], [53, 2]);
       assert.deepEqual(r.object, [[0xA0], 'Dictionary']);
+
+      r = rs[10];
+      assert.deepEqual([r.index, r.length], [57, 5]);
+      assert.deepEqual(r.object, [[0xC0, 0x00], 'Allocator']);
+      r = rs[11];
+      assert.deepEqual([r.index, r.length], [58, 1]);
+      assert.deepEqual(r.object, [[0x01], 'Integer']);
     });
   });
 
@@ -64,7 +71,7 @@ describe('textobjdbor.encode()', function () {
 
     it('keys are sorted', function () {
       let rs = textobjdbor.encode('{-22: 0, 24: 0, -23: 0, 23: 0, -24: 0, 22: 0}');
-      assert.deepEqual(rs.length, 1 + 2 * 6);
+      assert.equal(rs.length, 1 + 2 * 6);
 
       assert.equal(rs[1 + 2 * 0].index, 39);  // 22
       assert.equal(rs[1 + 2 * 1].index, 24);  // 23
@@ -73,6 +80,40 @@ describe('textobjdbor.encode()', function () {
       assert.equal(rs[1 + 2 * 4].index, 16);  // -23
       assert.equal(rs[1 + 2 * 5].index, 31);  // -24
     });
+
+  });
+
+  describe('allocator', function () {
+
+    it('fills with 0xFF', function () {
+      let rs = textobjdbor.encode('(0)&3');
+      assert.equal(rs.length, 3);
+
+      let r = rs[0];
+      assert.deepEqual([r.index, r.length], [0, 5]);
+      assert.deepEqual(r.object, [[0xC0, 0x02], 'Allocator']);
+
+      r = rs[1];
+      assert.deepEqual([r.index, r.length], [1, 1]);
+      assert.deepEqual(r.object, [[0x00], 'Integer']);
+
+      r = rs[2];
+      assert.deepEqual([r.index, r.length], [2, 0]);
+      assert.deepEqual(r.object, [[0xFF, 0xFF], 'fill']);
+    })
+
+    it('does not fill if correct size', function () {
+      let rs = textobjdbor.encode('(0)&1');
+      assert.equal(rs.length, 2);
+
+      let r = rs[0];
+      assert.deepEqual([r.index, r.length], [0, 5]);
+      assert.deepEqual(r.object, [[0xC0, 0x00], 'Allocator']);
+
+      r = rs[1];
+      assert.deepEqual([r.index, r.length], [1, 1]);
+      assert.deepEqual(r.object, [[0x00], 'Integer']);
+    })
 
   });
 
@@ -127,6 +168,50 @@ describe('textobjdbor.encode()', function () {
           assert.instanceOf(error, textobj.InputError);
           assert.equal(error.message, 'dictionary key must be elementary (no container or None)');
           assert.equal(error.index, 7);
+        }
+      });
+
+    });
+
+    describe('allocator', function () {
+
+      it('allocator in allocator', function () {
+        try {
+          textobjdbor.encode('((1)&1)&1');
+        } catch (error) {
+          assert.instanceOf(error, textobj.InputError);
+          assert.equal(error.message, 'contained object must not be allocator');
+          assert.equal(error.index, 1);
+        }
+      });
+
+      it('contained object too large', function () {
+        try {
+          textobjdbor.encode('(24)&1');
+        } catch (error) {
+          assert.instanceOf(error, textobj.InputError);
+          assert.equal(error.message, 'contained object larger than specified maximum size of 1');
+          assert.equal(error.index, 1);
+        }
+      });
+
+      it('maximum size too large for ECMAScript array', function () {
+        try {
+          textobjdbor.encode('(1)&111111111111111111');
+        } catch (error) {
+          assert.instanceOf(error, textobj.InputError);
+          assert.equal(error.message, 'maximum size too large for ECMAScript');
+          assert.equal(error.index, 4);
+        }
+      });
+
+      it('maximum size too large for DBOR', function () {
+        try {
+          textobjdbor.encode('(1)&16#FFFF_FFFF_FFFF_FFFF_FFFF');
+        } catch (error) {
+          assert.instanceOf(error, textobj.InputError);
+          assert.equal(error.message, 'maximum size too large');
+          assert.equal(error.index, 4);
         }
       });
 

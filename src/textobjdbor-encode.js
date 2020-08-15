@@ -19,6 +19,7 @@ textobjdbor.encodeSingle = function (inputRangeWithObject /* textobj.InputRange(
     let dborClass = null;  // null or String (e.g. 'Integer')
 
     if (object instanceof textobj.IntegerWithExpFactor) {
+
       if (object.mant === 0n && object.isNeg) {
         encoder.appendMinusZero();
         dborClass = 'MinusZero';
@@ -37,7 +38,9 @@ textobjdbor.encodeSingle = function (inputRangeWithObject /* textobj.InputRange(
         encoder.appendBinaryRational(object.mant, object.exp);
         dborClass = 'BinaryRational';
       }
+
     } else if (object instanceof textobj.SpecialLiteral) {
+
       switch (object.literal) {
         case 'None':
           encoder.appendNone();
@@ -51,13 +54,19 @@ textobjdbor.encodeSingle = function (inputRangeWithObject /* textobj.InputRange(
       }
       if (encoder.bytes.length)
         dborClass = object.literal;
+
     } else if (object instanceof textobj.UnicodeString) {
+
       dborClass = 'Utf8String';
       encoder.appendUtf8String(object.value);
+
     } else if (object instanceof textobj.ByteString) {
+
       dborClass = 'ByteString';
       encoder.appendByteString(object.value);
+
     } else if (object instanceof textobj.Sequence) {
+
       dborClass = 'Sequence';
       for (let o of object.parsedObjects) {
         const [size, eos] = textobjdbor.encodeSingle(o);
@@ -65,9 +74,10 @@ textobjdbor.encodeSingle = function (inputRangeWithObject /* textobj.InputRange(
         inputRangesWithDborValues = inputRangesWithDborValues.concat(eos);
       }
       encoder.appendSequenceHeader(totalSize);
-    } else if (object instanceof textobj.Dictionary) {
-      dborClass = 'Dictionary';
 
+    } else if (object instanceof textobj.Dictionary) {
+
+      dborClass = 'Dictionary';
       let encodedPairs = [];
         // [[InputRange(), [InputRange(), ...]], ...]; r.object is [dborClass, bytes]
         // for all InputRange instances r where bytes is an Uin8Array
@@ -95,6 +105,45 @@ textobjdbor.encodeSingle = function (inputRangeWithObject /* textobj.InputRange(
       }
 
       encoder.appendDictionaryHeader(totalSize);
+
+    } else if (object instanceof textobj.Allocator) {
+
+      dborClass = 'Allocator';
+
+      if (object.containedObject.object instanceof textobj.Allocator)
+        throw new textobj.InputError('contained object must not be allocator',
+                                     object.containedObject.index);
+
+      try {
+        encoder.appendAllocatorHeader(object.maxContainedSize);
+      } catch (error) {
+        throw new textobj.InputError('maximum size too large', object.sizeInputIndex);
+      }
+
+      const [size, eos] = textobjdbor.encodeSingle(object.containedObject);
+      if (size > object.maxContainedSize)
+        throw new textobj.InputError(`contained object larger than specified maximum size of ${object.maxContainedSize}`,
+                                     object.containedObject.index);
+      totalSize += size;
+
+      inputRangesWithDborValues = inputRangesWithDborValues.concat(eos);
+      if (size < object.maxContainedSize) {
+        let n = Number(object.maxContainedSize - size);
+        if (!Number.isSafeInteger(n))
+          n = -1;
+
+        let fillBytes;
+        try {
+          fillBytes = new Array(n).fill(0xFF);  // RangeError if n < 0 or too large
+        } catch (error) {
+          if (error instanceof RangeError)
+            throw new textobj.InputError('maximum size too large for ECMAScript', object.sizeInputIndex)
+          throw error;
+        }
+
+        const fill = new textobj.InputRange(object.containedObject.index + object.containedObject.length, 0, [fillBytes, 'fill']);
+        inputRangesWithDborValues.push(fill);
+      }
     }
 
     if (!dborClass)

@@ -82,6 +82,16 @@ textobj.Dictionary = class extends textobj.Container {
 };
 
 
+textobj.Allocator = class extends textobj.Container {
+  constructor(containedObject /* Object */, maxContainedSize /* BigInt */, sizeInputIndex = null /* Number */) {
+    super();
+    this.containedObject = containedObject;
+    this.maxContainedSize = BigInt(maxContainedSize);
+    this.sizeInputIndex = sizeInputIndex == null ? null : Number(sizeInputIndex);
+  }
+};
+
+
 // Input from UTF-16 code unit 'index' to UTF-16 code unit
 // 'index' + 'length' - 1 with (optional) associated object 'object'.
 
@@ -601,7 +611,7 @@ textobj.Parser = class {
   //   <optional-whitespace> ::= { <whitespace-character> }.
   //   <ws-dictionary-item> ::= <optional-whitespace> <object> <optional-whitespace> ":" <object> <optional-whitespace>.
 
-  consumeDictionary () {    // -> textobj.Dictionary([textobj.InputRange(..., [k1, o1]), ..., textobj.InputRange(..., [kn, on])])
+  consumeDictionary () {  // -> textobj.Dictionary([textobj.InputRange(..., [k1, o1]), ..., textobj.InputRange(..., [kn, on])])
     if (this.unparsed[0] != '{')
       throw new textobj.InputError('missing dictionary', this.index);
 
@@ -640,9 +650,46 @@ textobj.Parser = class {
   }
 
 
+  // Consume the longest prefix of the unparsed text that is an
+  // <allocator> (at least two characters) and return it as a textobj.Allocator.
+  //
+  // Invalid if <number> contains "." or <exp-factor>, or represents a non-negative number.
+  //
   // Syntax:
   //
-  //   <object> ::= <number> | <special-literal> | <unicode-string> | <byte-string> | <sequence> | <dictionary>.
+  //   <allocator> ::= "(" <optional-whitespace> <object> <optional-whitespace> "}"
+  //   <size-specifier> ::= "&" <number>.
+
+  consumeAllocator () {  // -> textobj.Allocator(textobj.Object(), maxSize)
+    if (this.unparsed[0] != '(')
+      throw new textobj.InputError('missing allocator', this.index);
+
+    this.advance();
+    this.consumeOptionalWhitespace();
+
+    const containedObject = this.parseObject();
+
+    this.consumeOptionalWhitespace();
+    if (this.unparsed[0] != ')')
+      throw new textobj.InputError("missing ')'", this.index);
+    this.advance();
+    if (this.unparsed[0] != '&' && this.unparsed[0] != '=')
+      throw new textobj.InputError("missing '&'", this.index);
+
+    this.advance();
+    const [maxContainedSize, parsedlength] = textobj.parseSimpleInteger(this.unparsed, this.index);
+    if (maxContainedSize <= 0n)
+      throw new textobj.InputError('invalid as maximum size', this.index);
+    const sizeInputIndex = this.index;
+    this.advance(parsedlength);
+
+    return new textobj.Allocator(containedObject, maxContainedSize, sizeInputIndex);
+  }
+
+
+  // Syntax:
+  //
+  //   <object> ::= <number> | <special-literal> | <unicode-string> | <byte-string> | <sequence> | <dictionary> | <allocator>.
 
   parseObject () {  // -> InputRange(...)
     const startIndex = this.index;
@@ -660,6 +707,8 @@ textobj.Parser = class {
       object = this.consumeSequence();  // [ ... ]
     else if (this.unparsed[0] == '{')
       object = this.consumeDictionary();  // { ... }
+    else if (this.unparsed[0] == '(')
+      object = this.consumeAllocator();  // ( ... )
 
     if (object == null)
       throw new textobj.InputError('missing object', startIndex);
