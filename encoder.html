@@ -130,7 +130,7 @@ Requires browser supports of:
       <table class="alignonly">
         <tr>
           <td class="firstcol"><button id="button-encode" title="Ctrl+Enter">Encode</button></td>
-          <td><span id="span-encoding-error">&#x26A0; Browser does not comply with ECMAScript 2020 or scripts are (partially) disabled</span></td>
+          <td><span id="span-encoding-error"><noscript>&#x26A0; ECMAScript disabled or not supported</noscript></span></td>
         </tr>
       </table>
       <p></p>
@@ -166,7 +166,6 @@ Requires browser supports of:
     <script type="text/javascript">
       "use strict";
 
-      // --- relies on style/CSS but not specific DOM elements: ---
 
       function createBytesElementFromInputRangesWithDborValues (inputRangesWithDborValues, functionForLink = null) {
         const spanElement = document.createElement('span');
@@ -227,11 +226,8 @@ Requires browser supports of:
       }
 
 
-      // --- relies on specific DOM elements but not style/CSS: ---
-
-
-      function setEncodingState (isComplete = false, inputRangesWithDborValues = null,
-                                 input = null, errorSpanElement = null /* null or <span/>-element */)
+      function setEncodingState (isComplete = false, bytesSpanElement = null /* null or <span/> element */,
+                                 input = null, errorSpanElement = null /* null or <span/> element */)
       {
         const representationElement = document.getElementById('div-representation');
         const outputElement = document.getElementById('div-dborbytes');
@@ -241,9 +237,10 @@ Requires browser supports of:
         inputUrlElement.href = input ? `?q=${encodeURIComponent(input)}` : '';
 
         outputElement.innerHTML = '';
-        outputElement.appendChild(createBytesElementFromInputRangesWithDborValues(inputRangesWithDborValues, 'selectInInput'));
+        if (input && bytesSpanElement)
+          outputElement.appendChild(bytesSpanElement);
+        representationElement.classList.toggle('valid', input && bytesSpanElement && !errorSpanElement);
         representationElement.classList.toggle('invalid', errorSpanElement);
-        representationElement.classList.toggle('valid', !errorSpanElement && inputRangesWithDborValues);
 
         stateElement.innerHTML = '';
         if (errorSpanElement)
@@ -267,24 +264,27 @@ Requires browser supports of:
       function encodeInput () {
         const inputElement = document.getElementById('textarea-input');
         const input = inputElement.value || '';
+        const selectionFunctionForLink = 'selectInInput';
 
         try {
-          setEncodingState(true, textobjdbor.encode(input), input);
+            const inputRangesWithDborValues = textobjdbor.encode(input);
+            const bytesSpanElement = createBytesElementFromInputRangesWithDborValues
+              (inputRangesWithDborValues, selectionFunctionForLink);
+            setEncodingState(true, bytesSpanElement, input);
         } catch (error) {
-          const spanElement = document.createElement('span');
-          spanElement.textContent = error.message;
+          const errorSpanElement = document.createElement('span');
+          errorSpanElement.textContent = error.message;
 
           if (error instanceof textobj.InputError) {
             const [lineIndex, columnIndex] = textobj.makeIndexRelativeToLine(error.index, input);
-            const inputLineLinkElement = createInputLineLinkElement(error, lineIndex, columnIndex, 'selectInInput');
-            spanElement.prepend(document.createTextNode(': '));
-            spanElement.prepend(inputLineLinkElement);
-
+            const inputLineLinkElement = createInputLineLinkElement(error, lineIndex, columnIndex, selectionFunctionForLink);
+            errorSpanElement.prepend(document.createTextNode(': '));
+            errorSpanElement.prepend(inputLineLinkElement);
             selectInInput(error.index);  // set cursor immediately before first invalid character
           }
 
-          spanElement.prepend(document.createTextNode('\u{26A0} '));
-          setEncodingState(true, null, null, spanElement);
+          errorSpanElement.prepend(document.createTextNode('\u{26A0} '));
+          setEncodingState(true, null, null, errorSpanElement);
         }
       }
 
@@ -300,9 +300,20 @@ Requires browser supports of:
 
 
       function initalize () {
-        BigInt(0);  // introduced with ECMAScript 2020
-        if (!(dbor.loaded && textobj.loaded && textobjdbor.loaded))
+        let isOk;
+        try {
+          BigInt(0);  // introduced with ECMAScript 2020
+          isOk = dbor.loaded && textobj.loaded && textobjdbor.loaded;
+        } catch (error) {
+        }
+
+        if (!isOk) {
+          const errorNode = document.createTextNode(
+            '\u{26A0} Browser does not comply with ECMAScript 2020 or ' +
+            'scripts are (partially) disabled');
+          setEncodingState(false, null, null, errorNode);
           return;
+        }
 
         const inputElement = document.getElementById('textarea-input');
         inputElement.oninput = event => { setEncodingState() };  // mark input as changed
