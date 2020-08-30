@@ -22,6 +22,14 @@ Requires browser supports of:
       body {
         font-family: Helvetica, Arial, sans-serif;
       }
+      div.footer {
+        display: inline-block;
+        font-size: smaller;
+        margin-top: 3ex;
+        padding-top: 1ex;
+        border-top: 1px solid;
+        border-color: lightgray;
+      }
 
       /* table for alignement only */
       table.alignonly {
@@ -52,7 +60,8 @@ Requires browser supports of:
       div#div-representation.valid textarea.input {
         border-left-color: RoyalBlue;
       }
-      div#div-representation #span-encoding-error {
+      div#div-representation #span-encoding-error,
+      div#div-representation #div-noscript-error {
         color: red;
       }
       div#div-representation .ifvalid {
@@ -119,18 +128,18 @@ Requires browser supports of:
     <div id="div-representation">
       <div class="textareacontainer">
         Objects to encode<span class="ifvalid"> (<a id="a-input-url">as URL</a>)</span>:
-        <!-- note: placeholder is not supported by HTML 4.01 -->
+        <!-- note: placeholder, spellcheck is not supported by HTML 4.01 -->
         <textarea id="textarea-input" rows="1" cols="1"
                   placeholder="e.g '12.5*2^-6, 16#FFFF_BEAF'"
                   class="input" spellcheck="false"
-                  style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre"/></textarea>
+                  style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex; white-space: pre"></textarea>
       </div>
 
       <p></p>
       <table class="alignonly">
         <tr>
           <td class="firstcol"><button id="button-encode" title="Ctrl+Enter">Encode</button></td>
-          <td><span id="span-encoding-error"><noscript>&#x26A0; ECMAScript disabled or not supported</noscript></span></td>
+          <td><noscript><div id="div-noscript-error">&#x26A0; ECMAScript disabled or not supported</div></noscript><span id="span-encoding-error"></span></td>
         </tr>
       </table>
       <p></p>
@@ -141,27 +150,26 @@ Requires browser supports of:
              style="width: calc(100% - 10px); resize: none; height: 10ex; max-height: 10ex"></div>
       </div>
 
-      <p></p>
-      <par>
-        Examples:
-        <ul>
-          <li><a href="?q=None">None</a></li>
-          <li>Numbers and number-likes:
-              <a href="?q=12_345_000%2C%0A-16%23FFFF_FFFF%2C%0A2%2311001111%2C%0A36%23LETSFETZ">integers</a>,
-              <a href="?q=-0.75%2C%0A1.25*10%5E9">decimal rationals</a>,
-              <a href="?q=0.25*2%5E-1%2C%0A2%5E-16%233FE%2C%0A-2%231.1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_*_2%5E1024">binary rationals</a>,
-              <a href="?q=-0%2C%0AInf%2C%0A-Inf">-0 and &#xB1;&#x221E;</a></li>
-          <li>Strings: <a href="?q=%3C%3E%2C%0A%3C2%231111_0001%2C%200%2C%2016%23FF%3E">bytes</a>,
-              <a href="?q=%22%C2%A1Ol%C3%A9!%22%2C%0A%22braces%20%7B%7B%2C%20%7D%7D%20are%20escaped%20by%20doubling%22%2C%0A%22character%20by%20code%20point%3A%20%7B16%2310_FFFF%7D%22%2C%0A%22double%20quote%3A%20%7B34%7D%22">UTF-8 characters</a></li>
-          <li>Containers: <a href="?q=%5B1%2C%20%22123%22%2C%20%5B%3C42%2C%2099%3E%2C%20-2%231001%5D%5D">sequences</a>,
-              <a href="?q=%7B3%3A%20%22a%22%2C%201%3A%20%22b%22%2C%20-2%3A%20%5B%5D%2C%202.0%3A%20None%7D%2C%0A%7B1%3A%20%7B2%3A%20%22x%22%2C%203%3A%20%7B4%3A%20%22y%22%7D%7D%7D">dictionaries</a>,
-              <a href="?q=(%5B1%2C%20%20%20%202%5D%20%20%20)%268%2C%0A(%5B1111%2C%202222%5D)%268">allocators</a></li>
-        </ul>
-      </par>
+      <p>Examples:</p>
+      <ul>
+        <li><a href="?q=None">None</a></li>
+        <li>Numbers and number-likes:
+            <a href="?q=12_345_000%2C%0A-16%23FFFF_FFFF%2C%0A2%2311001111%2C%0A36%23LETSFETZ">integers</a>,
+            <a href="?q=-0.75%2C%0A1.25*10%5E9">decimal rationals</a>,
+            <a href="?q=0.25*2%5E-1%2C%0A2%5E-16%233FE%2C%0A-2%231.1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_1111_*_2%5E1024">binary rationals</a>,
+            <a href="?q=-0%2C%0AInf%2C%0A-Inf">-0 and &#xB1;&#x221E;</a></li>
+        <li>Strings: <a href="?q=%3C%3E%2C%0A%3C2%231111_0001%2C%200%2C%2016%23FF%3E">bytes</a>,
+            <a href="?q=%22%C2%A1Ol%C3%A9!%22%2C%0A%22braces%20%7B%7B%2C%20%7D%7D%20are%20escaped%20by%20doubling%22%2C%0A%22character%20by%20code%20point%3A%20%7B16%2310_FFFF%7D%22%2C%0A%22double%20quote%3A%20%7B34%7D%22">UTF-8 characters</a></li>
+        <li>Containers: <a href="?q=%5B1%2C%20%22123%22%2C%20%5B%3C42%2C%2099%3E%2C%20-2%231001%5D%5D">sequences</a>,
+            <a href="?q=%7B3%3A%20%22a%22%2C%201%3A%20%22b%22%2C%20-2%3A%20%5B%5D%2C%202.0%3A%20None%7D%2C%0A%7B1%3A%20%7B2%3A%20%22x%22%2C%203%3A%20%7B4%3A%20%22y%22%7D%7D%7D">dictionaries</a>,
+            <a href="?q=(%5B1%2C%20%20%20%202%5D%20%20%20)%268%2C%0A(%5B1111%2C%202222%5D)%268">allocators</a></li>
+      </ul>
 
       Built with <a href="https://github.com/dlu-ch/dbor-js/">dbor-js</a>.
       Encoding happens entirely in the browser; no part of the input data is sent to a server (except when set by URL query string).
     </div>
+
+    <div class="footer">&copy; 2020 Daniel Lutz</div>
 
     <script type="text/javascript">
       "use strict";
