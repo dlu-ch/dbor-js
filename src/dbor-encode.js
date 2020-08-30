@@ -3,6 +3,7 @@
 // Copyright (C) 2020 Daniel Lutz <dlu-ch@users.noreply.github.com>
 
 // https://www.ecma-international.org/ecma-262/11.0/
+// https://github.com/dlu-ch/dbor-spec/releases/download/v1.0.0/dbor.pdf
 
 "use strict";
 
